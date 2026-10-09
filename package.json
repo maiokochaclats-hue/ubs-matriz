@@ -1,0 +1,8 @@
+{
+  "name": "ubs-matriz",
+  "version": "1.0.0",
+  "main": "servidor.js",
+  "scripts": {
+    "start": "node servidor.js"
+  }
+}
