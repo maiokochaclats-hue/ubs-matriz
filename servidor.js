@@ -7,40 +7,136 @@ const crypto = require('crypto');
 const PORTA = process.env.PORT || 3000;
 const ARQUIVO_DADOS = path.join(__dirname, 'dados.json');
 const MAX_HISTORICO = 50;
-const SENHA_MATRIZ = 'ubs2026';
 const TOKENS = new Set();
 const TIMEOUT_HEARTBEAT = 15 * 1000;
 
-const USFS = [
-  { id: 'usf-01', nome: 'USF Canto do Mar',       regiao: 'Costa Norte' },
-  { id: 'usf-02', nome: 'USF Enseada I',          regiao: 'Costa Norte' },
-  { id: 'usf-03', nome: 'USF Enseada II',         regiao: 'Costa Norte' },
-  { id: 'usf-04', nome: 'USF Jaraguá',            regiao: 'Costa Norte' },
-  { id: 'usf-05', nome: 'USF Centro',             regiao: 'Região Central' },
-  { id: 'usf-06', nome: 'USF Pontal da Cruz',     regiao: 'Região Central' },
-  { id: 'usf-07', nome: 'USF Morro do Abrigo I',  regiao: 'Região Central' },
-  { id: 'usf-08', nome: 'USF Morro do Abrigo II', regiao: 'Região Central' },
-  { id: 'usf-09', nome: 'USF Olaria',             regiao: 'Região Central' },
-  { id: 'usf-10', nome: 'USF Itatinga I',         regiao: 'Região Central' },
-  { id: 'usf-11', nome: 'USF Itatinga II',        regiao: 'Região Central' },
-  { id: 'usf-12', nome: 'USF Topolândia I',       regiao: 'Região Central' },
-  { id: 'usf-13', nome: 'USF Topolândia II',      regiao: 'Região Central' },
-  { id: 'usf-14', nome: 'USF Varadouro',          regiao: 'Região Central' },
-  { id: 'usf-15', nome: 'USF Barequeçaba',        regiao: 'Costa Sul' },
-  { id: 'usf-16', nome: 'USF Maresias',           regiao: 'Costa Sul' },
-  { id: 'usf-17', nome: 'USF Boiçucanga I',       regiao: 'Costa Sul' },
-  { id: 'usf-18', nome: 'USF Boiçucanga II',      regiao: 'Costa Sul' },
-  { id: 'usf-19', nome: 'USF Camburi',            regiao: 'Costa Sul' },
-  { id: 'usf-20', nome: 'USF Juquehy I',          regiao: 'Costa Sul' },
-  { id: 'usf-21', nome: 'USF Juquehy II',         regiao: 'Costa Sul' },
-  { id: 'usf-22', nome: 'USF Barra do Sahy',      regiao: 'Costa Sul' },
-  { id: 'usf-23', nome: 'USF Barra do Una',       regiao: 'Costa Sul' },
-  { id: 'usf-24', nome: 'USF FSPSS',              regiao: 'Costa Sul' }
-];
+// ============ CREDENCIAIS INICIAIS (podem ser editadas via admin) ============
+const DADOS_INICIAIS = {
+  presidencia: {
+    usuario: 'presidente',
+    senha: 'presidencia2026',
+    nome: 'Carlos Eduardo Antunes Craveiro',
+    cargo: 'Presidente'
+  },
+  diretorias: [
+    {
+      id: 'dir-saude-bucal',
+      nome: 'Diretoria de Saúde Bucal',
+      usuario: 'daniel',
+      senha: 'saude2026',
+      diretor: 'Daniel Kakimoto de Capitani',
+      tipo: 'operacional',
+      unidades: []
+    },
+    {
+      id: 'dir-atencao-especializada',
+      nome: 'Diretoria de Atenção Especializada',
+      usuario: 'angelica',
+      senha: 'atencao2026',
+      diretor: 'Angélica Oliveira Costa',
+      tipo: 'operacional',
+      unidades: [
+        { id: 'centro-reabilitacao', nome: 'Centro de Reabilitação', regiao: 'Atenção Especializada' },
+        { id: 'ciama',               nome: 'CIAMA - Centro de Incentivo ao Aleitamento Materno', regiao: 'Atenção Especializada' },
+        { id: 'cemin',               nome: 'CEMIN - Centro Municipal de Infectologia', regiao: 'Atenção Especializada' },
+        { id: 'caps',                nome: 'CAPS - Centro de Atenção Psicossocial', regiao: 'Atenção Especializada' },
+        { id: 'caps-ad',             nome: 'CAPS AD - Álcool e Drogas', regiao: 'Atenção Especializada' },
+        { id: 'ubs',                 nome: 'UBS - Unidade Básica de Saúde', regiao: 'Atenção Especializada' },
+        { id: 'centro-gestacional',  nome: 'Centro Gestacional', regiao: 'Atenção Especializada' },
+        { id: 'caps-infantil',       nome: 'CAPS Infantil', regiao: 'Atenção Especializada' }
+      ]
+    },
+    {
+      id: 'dir-atencao-basica',
+      nome: 'Diretoria de Atenção Básica',
+      usuario: 'fernanda',
+      senha: 'basica2026',
+      diretor: 'Fernanda Carolina Souza Lima Paiuri',
+      tipo: 'operacional',
+      unidades: [
+        { id: 'usf-01', nome: 'USF Canto do Mar',       regiao: 'Costa Norte' },
+        { id: 'usf-02', nome: 'USF Enseada I',          regiao: 'Costa Norte' },
+        { id: 'usf-03', nome: 'USF Enseada II',         regiao: 'Costa Norte' },
+        { id: 'usf-04', nome: 'USF Jaraguá',            regiao: 'Costa Norte' },
+        { id: 'usf-05', nome: 'USF Centro',             regiao: 'Região Central' },
+        { id: 'usf-06', nome: 'USF Pontal da Cruz',     regiao: 'Região Central' },
+        { id: 'usf-07', nome: 'USF Morro do Abrigo I',  regiao: 'Região Central' },
+        { id: 'usf-08', nome: 'USF Morro do Abrigo II', regiao: 'Região Central' },
+        { id: 'usf-09', nome: 'USF Olaria',             regiao: 'Região Central' },
+        { id: 'usf-10', nome: 'USF Itatinga I',         regiao: 'Região Central' },
+        { id: 'usf-11', nome: 'USF Itatinga II',        regiao: 'Região Central' },
+        { id: 'usf-12', nome: 'USF Topolândia I',       regiao: 'Região Central' },
+        { id: 'usf-13', nome: 'USF Topolândia II',      regiao: 'Região Central' },
+        { id: 'usf-14', nome: 'USF Varadouro',          regiao: 'Região Central' },
+        { id: 'usf-15', nome: 'USF Barequeçaba',        regiao: 'Costa Sul' },
+        { id: 'usf-16', nome: 'USF Maresias',           regiao: 'Costa Sul' },
+        { id: 'usf-17', nome: 'USF Boiçucanga I',       regiao: 'Costa Sul' },
+        { id: 'usf-18', nome: 'USF Boiçucanga II',      regiao: 'Costa Sul' },
+        { id: 'usf-19', nome: 'USF Camburi',            regiao: 'Costa Sul' },
+        { id: 'usf-20', nome: 'USF Juquehy I',          regiao: 'Costa Sul' },
+        { id: 'usf-21', nome: 'USF Juquehy II',         regiao: 'Costa Sul' },
+        { id: 'usf-22', nome: 'USF Barra do Sahy',      regiao: 'Costa Sul' },
+        { id: 'usf-23', nome: 'USF Barra do Una',       regiao: 'Costa Sul' },
+        { id: 'usf-24', nome: 'USF FSPSS',              regiao: 'Costa Sul' }
+      ]
+    },
+    {
+      id: 'dir-financeira',
+      nome: 'Diretoria Financeira',
+      usuario: 'liliane',
+      senha: 'financeira2026',
+      diretor: 'Liliane Maria de Melo Aniceto de Souza',
+      tipo: 'operacional',
+      unidades: []
+    },
+    {
+      id: 'dir-administrativa',
+      nome: 'Diretoria Administrativa',
+      usuario: 'williams',
+      senha: 'admin2026',
+      diretor: 'Williams Alves Santana',
+      tipo: 'operacional',
+      unidades: []
+    }
+  ],
+  orgaos_apoio: [
+    {
+      id: 'apoio-controladoria',
+      nome: 'Controladoria Interna',
+      usuario: 'fabiana',
+      senha: 'control2026',
+      responsavel: 'Fabiana Centurião'
+    },
+    {
+      id: 'apoio-juridico',
+      nome: 'Jurídico',
+      usuario: 'juridico',
+      senha: 'juridico2026',
+      responsavel: null
+    },
+    {
+      id: 'apoio-nep',
+      nome: 'NEP - Núcleo de Ensino e Pesquisa',
+      usuario: 'nep',
+      senha: 'nep2026',
+      responsavel: null
+    },
+    {
+      id: 'apoio-seguranca',
+      nome: 'Segurança do Trabalho',
+      usuario: 'seguranca',
+      senha: 'seguranca2026',
+      responsavel: null
+    }
+  ]
+};
 
-let ubsMap = {};
+// ============ ESTADO ============
+let estado = JSON.parse(JSON.stringify(DADOS_INICIAIS)); // cópia profunda
+let ubsMap = {}; // estado das unidades ativas (setores, documentos, etc.)
 const clientesWS = new Set();
 
+// ============ TIMEOUT HEARTBEAT ============
 setInterval(() => {
   const agora = Date.now();
   Object.values(ubsMap).forEach(ubs => {
@@ -48,21 +144,35 @@ setInterval(() => {
       ubs.online = false;
       broadcast({ type: 'ubs_offline', ubs_id: ubs.id });
       salvarDados();
-      console.log(`🔴 USF offline por inatividade: ${ubs.nome}`);
     }
   });
 }, 5000);
 
+// ============ PERSISTÊNCIA ============
 function carregarDados() {
   try {
     if (fs.existsSync(ARQUIVO_DADOS)) {
       const raw = fs.readFileSync(ARQUIVO_DADOS, 'utf8');
-      ubsMap = JSON.parse(raw);
+      const dados = JSON.parse(raw);
+      // Compatibilidade: dados antigos só tinham ubsMap
+      if (dados.ubsMap && !dados.estado) {
+        ubsMap = dados.ubsMap || {};
+        estado = JSON.parse(JSON.stringify(DADOS_INICIAIS));
+      } else {
+        ubsMap = dados.ubsMap || {};
+        estado = dados.estado || JSON.parse(JSON.stringify(DADOS_INICIAIS));
+      }
       Object.values(ubsMap).forEach(u => { u.online = false; });
-      console.log(`💾 Dados carregados: ${Object.keys(ubsMap).length} USF`);
+      console.log(`💾 Dados carregados: ${Object.keys(ubsMap).length} unidades ativas`);
+    } else {
+      // Primeira execução: cria dados iniciais
+      estado = JSON.parse(JSON.stringify(DADOS_INICIAIS));
+      ubsMap = {};
+      console.log('🆕 Primeira execução: usando dados iniciais');
     }
   } catch (e) {
     console.error('⚠️ Falha ao carregar dados.json:', e.message);
+    estado = JSON.parse(JSON.stringify(DADOS_INICIAIS));
     ubsMap = {};
   }
 }
@@ -72,13 +182,14 @@ function salvarDados() {
   clearTimeout(salvarTimer);
   salvarTimer = setTimeout(() => {
     try {
-      fs.writeFileSync(ARQUIVO_DADOS, JSON.stringify(ubsMap, null, 2), 'utf8');
+      fs.writeFileSync(ARQUIVO_DADOS, JSON.stringify({ estado, ubsMap }, null, 2), 'utf8');
     } catch (e) {
       console.error('⚠️ Falha ao salvar dados.json:', e.message);
     }
   }, 500);
 }
 
+// ============ WEBSOCKET (mesmo esquema de antes) ============
 function aceitarWS(req, socket) {
   const key = req.headers['sec-websocket-key'];
   const accept = crypto.createHash('sha1')
@@ -90,7 +201,7 @@ function aceitarWS(req, socket) {
     'Connection: Upgrade\r\n' +
     `Sec-WebSocket-Accept: ${accept}\r\n\r\n`
   );
-  const cliente = { socket, buffer: Buffer.alloc(0) };
+  const cliente = { socket, buffer: Buffer.alloc(0), papel: null, usuario: null };
   clientesWS.add(cliente);
   socket.on('data', (chunk) => processarFrames(cliente, chunk));
   socket.on('close', () => clientesWS.delete(cliente));
@@ -131,25 +242,72 @@ function enviarWS(cliente, obj) {
   try { cliente.socket.write(Buffer.concat([header, data])); } catch(e) {}
 }
 function broadcast(obj) { clientesWS.forEach(c => enviarWS(c, obj)); }
+function broadcastFiltrado(obj, filtro) {
+  clientesWS.forEach(c => { if (filtro(c)) enviarWS(c, obj); });
+}
 
+// ============ HELPERS DE PERMISSÃO ============
+// Encontra a qual diretoria uma unidade pertence
+function encontrarDiretoriaDaUnidade(ubsId) {
+  return estado.diretorias.find(d => d.unidades.some(u => u.id === ubsId));
+}
+
+// Verifica se o usuário logado pode receber/enviar mensagem para um destino
+function podeInteragir(origem, destino) {
+  // origem e destino: { tipo: 'presidencia'|'diretoria'|'apoio'|'unidade', id }
+  if (!origem || !destino) return false;
+
+  // Presidência interage com todos
+  if (origem.tipo === 'presidencia') return true;
+  if (destino.tipo === 'presidencia') return true;
+
+  // Diretoria <-> Apoio: podem se comunicar
+  if (origem.tipo === 'diretoria' && destino.tipo === 'apoio') return true;
+  if (origem.tipo === 'apoio' && destino.tipo === 'diretoria') return true;
+
+  // Diretoria <-> Diretoria: NÃO podem
+  if (origem.tipo === 'diretoria' && destino.tipo === 'diretoria') return false;
+
+  // Apoio <-> Apoio: podem
+  if (origem.tipo === 'apoio' && destino.tipo === 'apoio') return true;
+
+  // Unidade <-> Unidade: NÃO
+  if (origem.tipo === 'unidade' && destino.tipo === 'unidade') return false;
+
+  // Unidade <-> Diretoria: só se for a mesma diretoria
+  if (origem.tipo === 'unidade' && destino.tipo === 'diretoria') {
+    const dir = encontrarDiretoriaDaUnidade(origem.id);
+    return dir && dir.id === destino.id;
+  }
+  if (origem.tipo === 'diretoria' && destino.tipo === 'unidade') {
+    const dir = encontrarDiretoriaDaUnidade(destino.id);
+    return dir && dir.id === origem.id;
+  }
+
+  // Unidade <-> Apoio: NÃO (só via Presidência)
+  if (origem.tipo === 'unidade' && destino.tipo === 'apoio') return false;
+  if (origem.tipo === 'apoio' && destino.tipo === 'unidade') return false;
+
+  return false;
+}
+
+// ============ TRATAR MENSAGENS WS ============
 function tratarMensagem(cliente, msg) {
   if (!msg || !msg.type) return;
 
-  if (msg.type === 'ola_matriz') {
-    cliente.papel = 'matriz';
-    enviarWS(cliente, {
-      type: 'estado_inicial',
-      ubs: Object.values(ubsMap),
-      listaUSF: USFS
-    });
+  if (msg.type === 'ola_matriz' || msg.type === 'ola_diretoria' || msg.type === 'ola_presidencia' || msg.type === 'ola_apoio') {
+    cliente.papel = msg.type.replace('ola_', '');
+    cliente.usuario = msg.usuario || null;
     return;
   }
+
   if (msg.type === 'ola_filial') {
     cliente.papel = 'filial';
     cliente.ubs_id = msg.ubs_id;
     return;
   }
 
+  // ===== Fluxo antigo (compatibilidade com filial.html) =====
   if (msg.type === 'dados_setor' && msg.ubs_id) {
     const ubs = ubsMap[msg.ubs_id];
     if (!ubs) return;
@@ -158,10 +316,7 @@ function tratarMensagem(cliente, msg) {
       setor.dados = { ...setor.dados, ...(msg.dados || {}) };
       setor.ultimaAtualizacao = new Date().toISOString();
       if (!setor.historico) setor.historico = [];
-      setor.historico.unshift({
-        ts: setor.ultimaAtualizacao,
-        dados: { ...setor.dados }
-      });
+      setor.historico.unshift({ ts: setor.ultimaAtualizacao, dados: { ...setor.dados } });
       if (setor.historico.length > MAX_HISTORICO) setor.historico.length = MAX_HISTORICO;
     }
     ubs.novosDados = (ubs.novosDados || 0) + 1;
@@ -261,6 +416,7 @@ function tratarMensagem(cliente, msg) {
   }
 }
 
+// ============ HTTP ============
 function lerCorpo(req) {
   return new Promise((res) => {
     let b = ''; req.on('data', c => b += c); req.on('end', () => { try { res(JSON.parse(b || '{}')); } catch(e){ res({}); } });
@@ -277,6 +433,25 @@ function htmlFile(res, nome) {
   });
 }
 
+// ============ AUTENTICAÇÃO ============
+function autenticar(usuario, senha) {
+  // Presidência
+  if (estado.presidencia && estado.presidencia.usuario === usuario && estado.presidencia.senha === senha) {
+    return { ok: true, papel: 'presidencia', dados: { nome: estado.presidencia.nome, cargo: estado.presidencia.cargo } };
+  }
+  // Diretorias
+  const dir = estado.diretorias.find(d => d.usuario === usuario && d.senha === senha);
+  if (dir) {
+    return { ok: true, papel: 'diretoria', dados: { id: dir.id, nome: dir.nome, diretor: dir.diretor } };
+  }
+  // Órgãos de apoio
+  const apoio = estado.orgaos_apoio.find(o => o.usuario === usuario && o.senha === senha);
+  if (apoio) {
+    return { ok: true, papel: 'apoio', dados: { id: apoio.id, nome: apoio.nome, responsavel: apoio.responsavel } };
+  }
+  return { ok: false };
+}
+
 const server = http.createServer(async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -286,48 +461,150 @@ const server = http.createServer(async (req, res) => {
 
   if (req.headers.upgrade === 'websocket') return aceitarWS(req, req.socket);
 
-  // ---------- Autenticação ----------
+  // ===== LOGIN =====
   if (url === '/api/login' && req.method === 'POST') {
     const body = await lerCorpo(req);
-    if (body.senha === SENHA_MATRIZ) {
+    const r = autenticar(body.usuario, body.senha);
+    if (r.ok) {
       const token = crypto.randomBytes(24).toString('hex');
-      TOKENS.add(token);
-      setTimeout(() => TOKENS.delete(token), 24 * 60 * 60 * 1000);
-      return json(res, 200, { ok: true, token });
+      TOKENS.add({ token, papel: r.papel, dados: r.dados, ts: Date.now() });
+      setTimeout(() => {
+        for (const t of TOKENS) if (t.token === token) TOKENS.delete(t);
+      }, 24 * 60 * 60 * 1000);
+      return json(res, 200, { ok: true, token, papel: r.papel, dados: r.dados });
     }
-    return json(res, 401, { ok: false, erro: 'Senha inválida' });
-  }
-
-  if (url === '/api/verificar' && req.method === 'POST') {
-    const body = await lerCorpo(req);
-    return json(res, 200, { ok: TOKENS.has(body.token) });
+    return json(res, 401, { ok: false, erro: 'Usuário ou senha inválidos' });
   }
 
   if (url === '/api/logout' && req.method === 'POST') {
     const body = await lerCorpo(req);
-    TOKENS.delete(body.token);
+    for (const t of TOKENS) if (t.token === body.token) TOKENS.delete(t);
     return json(res, 200, { ok: true });
   }
 
-  if (url === '/api/usfs') {
-    return json(res, 200, { usfs: USFS });
-  }
-
-  if (url === '/api/marcar-lido' && req.method === 'POST') {
+  // ===== VERIFICAR TOKEN =====
+  if (url === '/api/verificar' && req.method === 'POST') {
     const body = await lerCorpo(req);
-    const ubs = ubsMap[body.ubs_id];
-    if (ubs) {
-      ubs.novosDados = 0;
-      salvarDados();
-    }
-    return json(res, 200, { ok: true });
+    const t = [...TOKENS].find(x => x.token === body.token);
+    return json(res, 200, { ok: !!t, papel: t?.papel, dados: t?.dados });
   }
 
-  // ---------- Rotas de dados ----------
+  // ===== LISTA DE UNIDADES (por diretoria) =====
+  if (url === '/api/unidades') {
+    const cookie = req.headers.cookie || '';
+    const token = cookie.match(/token=([a-f0-9]+)/)?.[1];
+    const t = [...TOKENS].find(x => x.token === token);
+    if (!t) return json(res, 401, { ok: false });
+
+    if (t.papel === 'presidencia') {
+      // Presidência vê todas
+      const todas = [];
+      estado.diretorias.forEach(d => {
+        d.unidades.forEach(u => todas.push({ ...u, diretoria: d.nome, diretoria_id: d.id }));
+      });
+      return json(res, 200, { ok: true, unidades: todas });
+    }
+    if (t.papel === 'diretoria') {
+      const d = estado.diretorias.find(x => x.id === t.dados.id);
+      return json(res, 200, { ok: true, unidades: d.unidades });
+    }
+    if (t.papel === 'apoio') {
+      // Apoio vê todas (mas só para consulta)
+      const todas = [];
+      estado.diretorias.forEach(d => {
+        d.unidades.forEach(u => todas.push({ ...u, diretoria: d.nome, diretoria_id: d.id }));
+      });
+      return json(res, 200, { ok: true, unidades: todas });
+    }
+    return json(res, 403, { ok: false });
+  }
+
+  // ===== ADMIN — SÓ PRESIDÊNCIA =====
+  function requirePresidencia(req) {
+    const cookie = req.headers.cookie || '';
+    const token = cookie.match(/token=([a-f0-9]+)/)?.[1];
+    const t = [...TOKENS].find(x => x.token === token);
+    return t && t.papel === 'presidencia';
+  }
+
+  if (url === '/api/admin/estado' && req.method === 'GET') {
+    if (!requirePresidencia(req)) return json(res, 403, { ok: false });
+    return json(res, 200, { ok: true, estado });
+  }
+
+  if (url === '/api/admin/diretoria' && req.method === 'POST') {
+    if (!requirePresidencia(req)) return json(res, 403, { ok: false });
+    const body = await lerCorpo(req);
+    const d = estado.diretorias.find(x => x.id === body.id);
+    if (!d) return json(res, 404, { ok: false, erro: 'Diretoria não encontrada' });
+    if (body.nome) d.nome = body.nome;
+    if (body.diretor) d.diretor = body.diretor;
+    if (body.usuario) d.usuario = body.usuario;
+    if (body.senha) d.senha = body.senha;
+    salvarDados();
+    return json(res, 200, { ok: true, diretoria: d });
+  }
+
+  if (url === '/api/admin/unidade' && req.method === 'POST') {
+    if (!requirePresidencia(req)) return json(res, 403, { ok: false });
+    const body = await lerCorpo(req);
+    const d = estado.diretorias.find(x => x.id === body.diretoria_id);
+    if (!d) return json(res, 404, { ok: false, erro: 'Diretoria não encontrada' });
+    d.unidades.push({
+      id: body.id,
+      nome: body.nome,
+      regiao: body.regiao || d.nome
+    });
+    salvarDados();
+    return json(res, 200, { ok: true, diretoria: d });
+  }
+
+  if (url === '/api/admin/unidade/remover' && req.method === 'POST') {
+    if (!requirePresidencia(req)) return json(res, 403, { ok: false });
+    const body = await lerCorpo(req);
+    const d = estado.diretorias.find(x => x.id === body.diretoria_id);
+    if (!d) return json(res, 404, { ok: false });
+    d.unidades = d.unidades.filter(u => u.id !== body.unidade_id);
+    salvarDados();
+    return json(res, 200, { ok: true, diretoria: d });
+  }
+
+  if (url === '/api/admin/apoio' && req.method === 'POST') {
+    if (!requirePresidencia(req)) return json(res, 403, { ok: false });
+    const body = await lerCorpo(req);
+    const o = estado.orgaos_apoio.find(x => x.id === body.id);
+    if (!o) return json(res, 404, { ok: false });
+    if (body.nome) o.nome = body.nome;
+    if (body.responsavel) o.responsavel = body.responsavel;
+    if (body.usuario) o.usuario = body.usuario;
+    if (body.senha) o.senha = body.senha;
+    salvarDados();
+    return json(res, 200, { ok: true, orgao: o });
+  }
+
+  if (url === '/api/admin/presidencia' && req.method === 'POST') {
+    if (!requirePresidencia(req)) return json(res, 403, { ok: false });
+    const body = await lerCorpo(req);
+    if (body.nome) estado.presidencia.nome = body.nome;
+    if (body.usuario) estado.presidencia.usuario = body.usuario;
+    if (body.senha) estado.presidencia.senha = body.senha;
+    salvarDados();
+    return json(res, 200, { ok: true, presidencia: estado.presidencia });
+  }
+
+  // ===== REGISTRO DE UNIDADE (compatível com filial.html) =====
   if (url === '/api/registrar' && req.method === 'POST') {
     const body = await lerCorpo(req);
     const id = body.ubs_id;
     const existente = ubsMap[id];
+
+    // Encontra a qual diretoria essa unidade pertence
+    const dir = encontrarDiretoriaDaUnidade(id);
+    if (!dir) {
+      return json(res, 404, { ok: false, erro: 'Unidade não cadastrada em nenhuma diretoria' });
+    }
+
+    const unidade = dir.unidades.find(u => u.id === id);
 
     const setoresNovos = (body.setores || []).map(s => {
       const antigo = existente?.setores?.find(x => x.id === s.id);
@@ -341,8 +618,10 @@ const server = http.createServer(async (req, res) => {
 
     ubsMap[id] = {
       id,
-      nome: body.nome,
-      regiao: body.regiao || null,
+      nome: unidade.nome,
+      regiao: unidade.regiao,
+      diretoria_id: dir.id,
+      diretoria_nome: dir.nome,
       online: true,
       ultimoHeartbeat: Date.now(),
       setores: setoresNovos,
@@ -351,89 +630,42 @@ const server = http.createServer(async (req, res) => {
     };
     salvarDados();
     broadcast({ type: 'ubs_registrada', ubs: ubsMap[id] });
-    console.log(`✅ USF registrada: ${body.nome} (${id})`);
+    console.log(`✅ Unidade registrada: ${unidade.nome} (${id}) → ${dir.nome}`);
     return json(res, 200, { ok: true, ubs: ubsMap[id] });
   }
 
-  if (url === '/api/aviso' && req.method === 'POST') {
-    const body = await lerCorpo(req);
-    const aviso = { titulo: body.titulo, mensagem: body.mensagem, prioridade: body.prioridade || 'info', ts: Date.now() };
-    broadcast({ type: 'aviso', aviso });
-    return json(res, 200, { ok: true });
-  }
-
+  // ===== BACKUP =====
   if (url === '/api/backup') {
     res.writeHead(200, {
       'Content-Type': 'application/json',
       'Content-Disposition': 'attachment; filename="dados.json"'
     });
-    return res.end(JSON.stringify(ubsMap, null, 2));
+    return res.end(JSON.stringify({ estado, ubsMap }, null, 2));
   }
 
-  // ---------- Páginas HTML ----------
-  if (url === '/matriz') {
+  // ===== PÁGINAS =====
+  if (url === '/matriz' || url === '/diretoria' || url === '/presidencia' || url === '/apoio' || url === '/admin') {
     const cookie = req.headers.cookie || '';
     const token = cookie.match(/token=([a-f0-9]+)/)?.[1];
-    if (!token || !TOKENS.has(token)) {
-      return htmlFile(res, 'login.html');
+    const t = [...TOKENS].find(x => x.token === token);
+    if (!t) return htmlFile(res, 'login.html');
+
+    // Redireciona para o painel correto do papel
+    if (url === '/matriz') {
+      if (t.papel === 'presidencia') return htmlFile(res, 'presidencia.html');
+      if (t.papel === 'diretoria') return htmlFile(res, 'diretoria.html');
+      if (t.papel === 'apoio') return htmlFile(res, 'apoio.html');
     }
-    return htmlFile(res, 'matriz.html');
+    if (url === '/presidencia' && t.papel !== 'presidencia') return htmlFile(res, 'login.html');
+    if (url === '/diretoria' && t.papel !== 'diretoria') return htmlFile(res, 'login.html');
+    if (url === '/apoio' && t.papel !== 'apoio') return htmlFile(res, 'login.html');
+    if (url === '/admin' && t.papel !== 'presidencia') return htmlFile(res, 'login.html');
+
+    if (url === '/presidencia') return htmlFile(res, 'presidencia.html');
+    if (url === '/diretoria') return htmlFile(res, 'diretoria.html');
+    if (url === '/apoio') return htmlFile(res, 'apoio.html');
+    if (url === '/admin') return htmlFile(res, 'admin.html');
   }
 
   if (url === '/') return htmlFile(res, 'login.html');
-  if (url === '/filial') return htmlFile(res, 'filial.html');
-
-  // ---------- PWA ----------
-  if (url === '/manifest.json') {
-    return fs.readFile(path.join(__dirname, 'manifest.json'), (e, d) => {
-      if (e) { res.writeHead(404); return res.end('manifest.json não encontrado'); }
-      res.writeHead(200, { 'Content-Type': 'application/manifest+json; charset=utf-8' });
-      res.end(d);
-    });
-  }
-
-  if (url === '/sw.js') {
-    return fs.readFile(path.join(__dirname, 'sw.js'), (e, d) => {
-      if (e) { res.writeHead(404); return res.end('sw.js não encontrado'); }
-      res.writeHead(200, { 'Content-Type': 'application/javascript; charset=utf-8' });
-      res.end(d);
-    });
-  }
-
-  if (url === '/favicon.ico') {
-    res.writeHead(204); return res.end();
-  }
-
-  res.writeHead(404); res.end('Rota não encontrada');
-});
-
-carregarDados();
-
-server.listen(PORTA, '0.0.0.0', () => {
-  const os = require('os');
-  const ips = Object.values(os.networkInterfaces()).flat()
-    .filter(i => i.family === 'IPv4' && !i.internal).map(i => i.address);
-  console.log('\n🏥 Servidor Matriz USF rodando!\n');
-  console.log(`   Login:   http://localhost:${PORTA}/`);
-  console.log(`   Matriz:  http://localhost:${PORTA}/matriz`);
-  ips.forEach(ip => {
-    console.log(`   LAN:     http://${ip}:${PORTA}/matriz`);
-    console.log(`   Filial:  http://${ip}:${PORTA}/filial`);
-  });
-  console.log(`\n💾 Backup: http://localhost:${PORTA}/api/backup`);
-  console.log(`🔑 Senha da matriz: ${SENHA_MATRIZ}`);
-  console.log(`📋 USFs cadastradas: ${USFS.length}`);
-  console.log('   (deixe esta janela aberta)\n');
-});
-
-const URL_EXTERNA = process.env.RENDER_EXTERNAL_URL;
-if (URL_EXTERNA) {
-  setInterval(() => {
-    https.get(URL_EXTERNA, (res) => {
-      console.log(`[keep-alive] Ping enviado. Status: ${res.statusCode}`);
-    }).on('error', (err) => {
-      console.error('[keep-alive] Erro no ping:', err.message);
-    });
-  }, 10 * 60 * 1000);
-  console.log(`🔁 Keep-alive ativo para: ${URL_EXTERNA}`);
-}
+  if (url === '/filial') return htmlFile(res,
