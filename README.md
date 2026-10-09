@@ -1,3 +1,4 @@
+[dados.json](https://github.com/user-attachments/files/33233244/dados.json)
 [dados.json](https://github.com/user-attachments/files/33232585/dados.json)
 [filial.html](https://github.com/user-attachments/files/33232586/filial.html)[login.html](https://github.com/user-attachments/files/33232589/login.html)[matriz.html](https://github.com/user-attachments/files/33232591/matriz.html)[package.json](https://github.com/user-attachments/files/33232593/package.json)[servidor.js](https://github.com/user-attachments/files/33232604/servidor.js)const http = require('http');
 const https = require('https');
@@ -230,12 +231,19 @@ const server = http.createServer(async (req, res) => {
   if (url === '/api/aviso' && req.method === 'POST') {
     const body = await lerCorpo(req);
     const aviso = { titulo: body.titulo, mensagem: body.mensagem, prioridade: body.prioridade || 'info', ts: Date.now() };
-    broadcast({ type: 'aviso', aviso });
-    return json(res, 200, { ok: true });
+    broadcast({ type: 'aviso', aviso });[login.html](https://github.com/user-attachments/files/33233252/login.html)
+    return json(res, 200, { ok: true });[filial.html](https://github.com/user-attachments/files/33233248/filial.html)
   }
 
-  if (url === '/api/backup') {
-    res.writeHead(200, {
+  if (url === '/api/backup') {[matriz.html](https://github.com/user-attachments/files/33233255/matriz.html)[package.json](https://github.com/user-attachments/files/33233256/package.json)
+    res.writeHead(200, {{
+  "name": "ubs-matriz",
+  "version": "1.0.0",
+  "main": "servidor.js",
+  "scripts": {
+    "start": "node servidor.js"
+  }
+}
       'Content-Type': 'application/json',
       'Content-Disposition': 'attachment; filename="dados.json"'
     });
