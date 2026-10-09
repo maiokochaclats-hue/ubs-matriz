@@ -43,6 +43,8 @@
   .doc-item a { color: #3b82f6; text-decoration: none; padding: 4px 10px; background: #1e3a8a; border-radius: 4px; font-size: 11px; white-space: nowrap; margin-left: 8px; }
   .doc-item a:hover { background: #1d4ed8; }
   .doc-vazio { color: #64748b; font-size: 12px; text-align: center; padding: 16px; }
+  .fila-info { font-size: 11px; color: #f59e0b; margin-top: 6px; display: none; }
+  .fila-info.ativo { display: block; }
 </style>
 </head>
 <body>
@@ -77,6 +79,7 @@
     </div>
   </div>
 
+  <div class="fila-info" id="fila-info"></div>
   <div class="log" id="log"></div>
 </div>
 
@@ -87,6 +90,7 @@ const SUPABASE_URL = 'https://gtmgqvoesezshgsthxhr.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_9v7pBfemMd0MR8E55Tkt4g_oknrNWrc';
 const BUCKET = 'ubs-documentos';
 const LIMITE_MB = 10;
+const CHAVE_FILA = 'ubs_fila_documentos';
 
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
@@ -100,6 +104,7 @@ let hb = null;
 let listaUSF = [];
 let documentosRecebidos = [];
 let autoRegistroFeito = false;
+let filaDocumentos = [];
 
 const SETORES = [
   { id: 'recepcao',      nome: 'Recepção',      campos: ['atendimentos', 'fila'] },
@@ -117,6 +122,80 @@ function log(msg, tipo = 'info') {
   d.scrollTop = d.scrollHeight;
 }
 
+// ============ FILA PERSISTENTE ============
+function carregarFila() {
+  try {
+    const raw = localStorage.getItem(CHAVE_FILA);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        filaDocumentos = parsed.filter(p => p.ubs_id === ubsId || !p.ubs_id);
+        // remove os que não pertencem a esta USF
+        filaDocumentos = parsed.filter(p => !p.ubs_id || p.ubs_id === ubsId);
+        atualizarInfoFila();
+      }
+    }
+  } catch (e) {
+    filaDocumentos = [];
+  }
+}
+
+function salvarFila() {
+  try {
+    localStorage.setItem(CHAVE_FILA, JSON.stringify(filaDocumentos));
+    atualizarInfoFila();
+  } catch (e) {}
+}
+
+function atualizarInfoFila() {
+  const info = document.getElementById('fila-info');
+  if (!info) return;
+  if (filaDocumentos.length === 0) {
+    info.classList.remove('ativo');
+    info.textContent = '';
+  } else {
+    info.classList.add('ativo');
+    info.textContent = `⏳ ${filaDocumentos.length} documento(s) na fila aguardando conexão...`;
+  }
+}
+
+function enfileirarDocumento(payload) {
+  payload.ubs_id = ubsId; // garante vínculo com a USF
+  filaDocumentos.push(payload);
+  salvarFila();
+  tentarEnviarFila();
+}
+
+function tentarEnviarFila() {
+  if (!ws || ws.readyState !== WebSocket.OPEN) return;
+  if (filaDocumentos.length === 0) return;
+
+  const restantes = [];
+  let enviados = 0;
+
+  for (const payload of filaDocumentos) {
+    // só envia payloads da própria USF
+    if (payload.ubs_id !== ubsId) {
+      restantes.push(payload);
+      continue;
+    }
+    try {
+      ws.send(JSON.stringify(payload));
+      enviados++;
+    } catch (e) {
+      restantes.push(payload);
+    }
+  }
+
+  filaDocumentos = restantes;
+  salvarFila();
+
+  if (enviados > 0) {
+    log(`📎 ${enviados} documento(s) enviado(s) para a Matriz`, 'ok');
+  }
+}
+
+// ============ LISTA DE USFs ============
 async function carregarUSFs() {
   const sel = document.getElementById('select-usf');
   try {
@@ -143,7 +222,7 @@ async function carregarUSFs() {
       sel.appendChild(optgroup);
     });
 
-    // ===== AUTO-REGISTRO VIA URL =====
+    // AUTO-REGISTRO VIA URL
     const params = new URLSearchParams(location.search);
     const usfParam = params.get('usf');
     if (usfParam && listaUSF.find(u => u.id === usfParam)) {
@@ -167,6 +246,7 @@ async function carregarUSFs() {
   }
 }
 
+// ============ REGISTRAR ============
 async function registrar() {
   const sel = document.getElementById('select-usf');
   const usfId = sel.value;
@@ -211,6 +291,9 @@ async function registrar() {
     document.getElementById('secao-docs').style.display = 'block';
     log(`✅ Registrada como ${ubsNome}`, 'ok');
 
+    // carrega fila após definir ubsId
+    carregarFila();
+
     renderSetores();
     conectarWS();
     iniciarHeartbeat();
@@ -219,6 +302,7 @@ async function registrar() {
   }
 }
 
+// ============ SETORES ============
 function renderSetores() {
   const g = document.getElementById('grid-setores');
   g.innerHTML = '';
@@ -260,6 +344,7 @@ function enviarDados(setorId) {
   }
 }
 
+// ============ ANEXAR DOCUMENTO ============
 function anexarSetor(setorId, setorNome) {
   if (!online) return log('❌ Não conectada ao servidor', 'err');
 
@@ -306,21 +391,22 @@ function anexarSetor(setorId, setorNome) {
       }
     }
 
-    if (documentos.length > 0 && ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({
+    if (documentos.length > 0) {
+      enfileirarDocumento({
         type: 'documento_setor',
         ubs_id: ubsId,
         setor_id: setorId,
         setor_nome: setorNome,
         documentos
-      }));
-      log(`📎 ${documentos.length} documento(s) enviado(s) para a Matriz`, 'ok');
+      });
+      log(`📥 ${documentos.length} documento(s) na fila de envio`, 'info');
     }
   };
 
   input.click();
 }
 
+// ============ WEBSOCKET ============
 function conectarWS() {
   const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
   ws = new WebSocket(`${proto}//${location.host}`);
@@ -328,6 +414,14 @@ function conectarWS() {
   ws.onopen = () => {
     log('🔌 WebSocket conectado', 'ok');
     ws.send(JSON.stringify({ type: 'ola_filial', ubs_id: ubsId }));
+
+    // reenvia fila acumulada
+    setTimeout(() => {
+      if (filaDocumentos.length > 0) {
+        log(`🔄 Reenviando ${filaDocumentos.length} documento(s) pendente(s)...`, 'info');
+        tentarEnviarFila();
+      }
+    }, 500);
   };
   ws.onclose = () => {
     log('🔌 WebSocket fechado, reconectando em 3s...', 'err');
@@ -353,6 +447,7 @@ function conectarWS() {
   };
 }
 
+// ============ DOCS RECEBIDOS ============
 function adicionarDocumentos(docs) {
   docs.forEach(d => documentosRecebidos.unshift(d));
   renderDocumentos();
@@ -380,15 +475,17 @@ function renderDocumentos() {
   });
 }
 
+// ============ HEARTBEAT ============
 function iniciarHeartbeat() {
   clearInterval(hb);
   hb = setInterval(() => {
     if (ws && ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({ type: 'heartbeat', ubs_id: ubsId }));
     }
-  }, 5000);
+  }, 2000);
 }
 
+// ============ INICIALIZA ============
 carregarUSFs();
 </script>
 </body>
