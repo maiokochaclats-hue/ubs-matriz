@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#0f172a">
+<title>Diretoria — Fundação São Sebastião</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: system-ui, sans-serif; background: #0f172a; color: #e2e8f0; min-height: 100vh; padding: 20px; }
+  .container { max-width: 1100px; margin: 0 auto; }
+  .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; padding: 16px 20px; background: #1e293b; border-radius: 12px; border: 1px solid #334155; }
+  h1 { font-size: 20px; color: #f1f5f9; }
+  h2 { font-size: 13px; color: #94a3b8; font-weight: normal; margin-top: 4px; }
+  .btn { background: #3b82f6; border: none; color: white; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 600; }
+  .btn.vermelho { background: #7f1d1d; }
+  .btn:hover { opacity: 0.9; }
+  .card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 32px; text-align: center; }
+  .card h3 { font-size: 24px; color: #f1f5f9; margin-bottom: 8px; }
+  .card p { color: #94a3b8; font-size: 14px; margin-bottom: 20px; }
+  .icone { font-size: 56px; margin-bottom: 16px; display: block; }
+  .info-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-top: 24px; }
+  .info-box { background: #1e293b; border: 1px solid #334155; border-radius: 10px; padding: 20px; text-align: center; }
+  .info-box .num { font-size: 32px; font-weight: bold; color: #3b82f6; }
+  .info-box .label { font-size: 12px; color: #94a3b8; margin-top: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .provisorio { background: #7c2d12; border: 1px solid #ea580c; color: #fed7aa; padding: 14px 20px; border-radius: 10px; font-size: 13px; margin-bottom: 20px; }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="topbar">
+    <div>
+      <h1 id="titulo-diretoria">🏥 Diretoria</h1>
+      <h2 id="usuario-info">Carregando...</h2>
+    </div>
+    <button class="btn vermelho" onclick="sair()">🚪 Sair</button>
+  </div>
+
+  <div class="provisorio">
+    ⚠️ <b>Etapa 1 concluída.</b> Este painel será expandido na Etapa 2 com:
+    monitoramento das unidades, envio de avisos e documentos, comunicação com a Presidência e Órgãos de Apoio.
+  </div>
+
+  <div class="card">
+    <span class="icone">📋</span>
+    <h3 id="nome-diretor">Bem-vindo(a)</h3>
+    <p>Painel da diretoria</p>
+  </div>
+
+  <div class="info-grid">
+    <div class="info-box"><div class="num" id="num-unid">—</div><div class="label">Unidades</div></div>
+    <div class="info-box"><div class="num" id="num-online">—</div><div class="label">Online agora</div></div>
+  </div>
+</div>
+
+<script>
+async function carregarInfo() {
+  try {
+    const dados = JSON.parse(localStorage.getItem('dados_usuario') || '{}');
+    document.getElementById('nome-diretor').textContent = dados.diretor || 'Diretor(a)';
+    document.getElementById('titulo-diretoria').textContent = '🏥 ' + (dados.nome || 'Diretoria');
+    document.getElementById('usuario-info').textContent = 'Diretor(a): ' + (dados.diretor || '—');
+
+    const res = await fetch('/api/unidades');
+    const data = await res.json();
+    if (data.ok) {
+      document.getElementById('num-unid').textContent = data.unidades.length;
+      document.getElementById('num-online').textContent = '0';
+    }
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+function sair() {
+  document.cookie = 'token=; path=/; max-age=0';
+  localStorage.clear();
+  location.href = '/';
+}
+
+carregarInfo();
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js').catch(() => {});
+}
+</script>
+</body>
+</html>
