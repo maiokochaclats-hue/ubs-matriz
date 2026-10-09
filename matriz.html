@@ -509,4 +509,54 @@ async function enviarDocMatriz() {
       const { data: urlData } = supabaseClient.storage.from(BUCKET).getPublicUrl(nome);
 
       documentos.push({
-       
+        nome: f.name,
+        tamanho: f.size,
+        url: urlData.publicUrl,
+        path: nome,
+        ts: new Date().toISOString()
+      });
+    } catch (e) {
+      status.textContent = `❌ Falha em "${f.name}": ${e.message}`;
+      return;
+    }
+  }
+
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({
+      type: 'documento_matriz',
+      ubs_id: ubsIdDestino,
+      documentos
+    }));
+    status.textContent = `✅ ${documentos.length} documento(s) enviado(s)!`;
+    setTimeout(fecharEnvioDoc, 1500);
+  } else {
+    status.textContent = '❌ WebSocket desconectado.';
+  }
+}
+
+function enviarAviso(p) {
+  const textos = {
+    info:    { titulo: 'Campanha de vacinação', mensagem: 'Campanha de vacinação inicia', prioridade: 'info' },
+    alerta:  { titulo: 'Estoque baixo',         mensagem: 'Estoque baixo em 5 USFs', prioridade: 'alerta' },
+    urgente: { titulo: 'Surtos suspeitos',      mensagem: 'Surtos suspeitos - notificar em 2h', prioridade: 'urgente' }
+  };
+  const aviso = textos[p];
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: 'aviso', aviso }));
+  } else {
+    console.warn('WebSocket não conectado');
+  }
+}
+
+function mostrarAviso(aviso) {
+  const b = document.getElementById('aviso-banner');
+  const t = document.getElementById('aviso-texto');
+  t.textContent = `[${aviso.prioridade.toUpperCase()}] ${aviso.mensagem}`;
+  b.className = 'aviso-banner ativo' + (aviso.prioridade === 'urgente' ? ' urgente' : '');
+  if (aviso.prioridade !== 'urgente') setTimeout(() => b.classList.remove('ativo'), 12000);
+}
+
+conectarWS();
+</script>
+</body>
+</html>
