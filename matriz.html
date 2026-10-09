@@ -2,26 +2,31 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<title>Matriz UBS</title>
+<title>Matriz USF</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: system-ui, sans-serif; background: #0f172a; color: #e2e8f0; padding: 20px; }
   h1 { font-size: 20px; color: #f1f5f9; }
   h2 { font-size: 13px; color: #94a3b8; font-weight: normal; margin-bottom: 16px; }
-  .matriz { max-width: 1300px; margin: 0 auto; }
+  .matriz { max-width: 1400px; margin: 0 auto; }
   .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding: 16px 20px; background: #1e293b; border-radius: 12px; border: 1px solid #334155; }
   .status-servidor { font-size: 12px; padding: 4px 10px; border-radius: 6px; background: #334155; color: #94a3b8; }
   .status-servidor.ok { background: #14532d; color: #86efac; }
   .status-servidor.err { background: #7f1d1d; color: #fecaca; }
-  .stats { display: flex; gap: 20px; font-size: 13px; align-items: center; }
-  .stat-online { color: #22c55e; } .stat-offline { color: #ef4444; } .stat-novos { color: #3b82f6; }
+  .stats { display: flex; gap: 16px; font-size: 13px; align-items: center; flex-wrap: wrap; }
+  .stat-online { color: #22c55e; } .stat-offline { color: #ef4444; } .stat-novos { color: #3b82f6; } .stat-docs { color: #a855f7; }
   .toggle-som { background: #334155; border: none; color: #e2e8f0; padding: 4px 10px; border-radius: 6px; cursor: pointer; font-size: 12px; }
   .toggle-som.ativo { background: #16a34a; color: white; }
   .aviso-banner { background: #7c2d12; border: 1px solid #ea580c; color: #fed7aa; padding: 10px 16px; border-radius: 8px; margin-bottom: 16px; font-size: 13px; display: none; align-items: center; gap: 10px; }
   .aviso-banner.ativo { display: flex; }
   .aviso-banner.urgente { background: #7f1d1d; border-color: #dc2626; color: #fecaca; animation: pulse-aviso 1.5s infinite; }
   @keyframes pulse-aviso { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
+  .barra-acoes { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; align-items: center; }
+  .btn-acao { background: #334155; border: none; color: #e2e8f0; padding: 8px 14px; border-radius: 6px; cursor: pointer; font-size: 12px; }
+  .btn-acao.vermelho { background: #7f1d1d; } .btn-acao.laranja { background: #7c2d12; } .btn-acao.roxo { background: #6d28d9; }
   .grid-ubs { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; }
+  .region-header { grid-column: 1/-1; font-size: 12px; color: #64748b; margin-top: 12px; margin-bottom: 4px; padding-bottom: 4px; border-bottom: 1px solid #334155; text-transform: uppercase; letter-spacing: 1px; }
+  .region-header:first-child { margin-top: 0; }
   .ubs-card { background: #1e293b; border: 2px solid #334155; border-radius: 10px; padding: 12px 10px; cursor: pointer; transition: all 0.2s; text-align: center; position: relative; user-select: none; }
   .ubs-card:hover { transform: translateY(-2px); border-color: #475569; }
   .ubs-card.online { border-color: #16a34a; }
@@ -34,9 +39,10 @@
   .dot.online { background: #22c55e; box-shadow: 0 0 6px #22c55e; }
   .dot.offline { background: #ef4444; }
   .badge-novo { position: absolute; top: -6px; right: -6px; background: #3b82f6; color: white; font-size: 10px; padding: 2px 6px; border-radius: 10px; font-weight: bold; }
+  .badge-doc { position: absolute; top: -6px; left: -6px; background: #a855f7; color: white; font-size: 10px; padding: 2px 6px; border-radius: 10px; font-weight: bold; }
   .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.75); display: none; align-items: center; justify-content: center; z-index: 100; }
   .modal-overlay.ativo { display: flex; }
-  .painel-ubs { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 24px; width: 780px; max-width: 92vw; max-height: 88vh; overflow-y: auto; }
+  .painel-ubs { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 24px; width: 900px; max-width: 95vw; max-height: 88vh; overflow-y: auto; }
   .painel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid #334155; }
   .painel-titulo { font-size: 18px; font-weight: bold; color: #f1f5f9; }
   .btn-fechar { background: #334155; border: none; color: #e2e8f0; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 13px; }
@@ -55,19 +61,38 @@
   .historico-item { font-size: 10px; color: #94a3b8; padding: 4px 0; border-bottom: 1px solid #1e293b; }
   .historico-item .ht { color: #64748b; }
   .historico-item .hd { color: #cbd5e1; }
-  .barra-acoes { display: flex; gap: 8px; margin-bottom: 16px; }
-  .btn-acao { background: #334155; border: none; color: #e2e8f0; padding: 8px 14px; border-radius: 6px; cursor: pointer; font-size: 12px; }
-  .btn-acao.vermelho { background: #7f1d1d; } .btn-acao.laranja { background: #7c2d12; }
+
+  .secao-docs-modal { margin-top: 20px; padding-top: 16px; border-top: 1px solid #334155; }
+  .secao-docs-modal h3 { font-size: 15px; color: #f1f5f9; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
+  .filtros-doc { display: flex; gap: 8px; margin-bottom: 12px; }
+  .filtros-doc button { background: #334155; border: none; color: #94a3b8; padding: 4px 10px; border-radius: 6px; cursor: pointer; font-size: 11px; }
+  .filtros-doc button.ativo { background: #6d28d9; color: white; }
+  .doc-lista { max-height: 240px; overflow-y: auto; }
+  .doc-item-modal { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: #0f172a; border-radius: 6px; margin-bottom: 6px; font-size: 12px; border-left: 3px solid #3b82f6; }
+  .doc-item-modal.matriz { border-left-color: #a855f7; }
+  .doc-item-modal .info { flex: 1; min-width: 0; }
+  .doc-item-modal .nome { color: #e2e8f0; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .doc-item-modal .meta { color: #64748b; font-size: 10px; margin-top: 2px; }
+  .doc-item-modal a { color: #3b82f6; text-decoration: none; padding: 4px 10px; background: #1e3a8a; border-radius: 4px; font-size: 11px; white-space: nowrap; margin-left: 8px; }
+  .doc-item-modal a:hover { background: #1d4ed8; }
+  .doc-vazio { color: #64748b; font-size: 12px; text-align: center; padding: 16px; }
+
+  .painel-envio { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 24px; width: 500px; max-width: 90vw; }
+  .painel-envio h3 { font-size: 16px; color: #f1f5f9; margin-bottom: 16px; }
+  .painel-envio label { font-size: 12px; color: #94a3b8; display: block; margin-bottom: 4px; margin-top: 12px; }
+  .painel-envio select, .painel-envio input[type=file] { background: #0f172a; border: 1px solid #334155; color: #e2e8f0; padding: 8px 12px; border-radius: 6px; font-size: 13px; width: 100%; }
+  .painel-envio .acoes { display: flex; gap: 8px; margin-top: 20px; justify-content: flex-end; }
 </style>
 </head>
 <body>
 <div class="matriz">
   <div class="topbar">
-    <div><h1>🏥 Matriz UBS</h1><h2>Monitoramento em tempo real</h2></div>
+    <div><h1>🏥 Matriz USF</h1><h2>Monitoramento em tempo real</h2></div>
     <div class="stats">
       <span class="stat-online">🟢 <b id="stat-online">0</b> online</span>
       <span class="stat-offline">🔴 <b id="stat-offline">0</b> offline</span>
       <span class="stat-novos">🔵 <b id="stat-novos">0</b> novos</span>
+      <span class="stat-docs">📁 <b id="stat-docs">0</b> docs</span>
       <button class="toggle-som" id="toggle-som" onclick="toggleSom()">🔇 Som OFF</button>
       <span class="status-servidor" id="status-servidor">⚪ Conectando...</span>
       <button class="toggle-som" onclick="sair()" style="background:#7f1d1d;">🚪 Sair</button>
@@ -77,23 +102,64 @@
     <button class="btn-acao" onclick="enviarAviso('info')">📢 Aviso INFO</button>
     <button class="btn-acao laranja" onclick="enviarAviso('alerta')">⚠️ Aviso ALERTA</button>
     <button class="btn-acao vermelho" onclick="enviarAviso('urgente')">🚨 Aviso URGENTE</button>
+    <button class="btn-acao roxo" onclick="abrirEnvioDoc()">📎 Enviar documento para USF</button>
   </div>
   <div class="aviso-banner" id="aviso-banner"><span>📢</span><span id="aviso-texto">—</span></div>
   <div class="grid-ubs" id="grid-ubs"></div>
 </div>
+
 <div class="modal-overlay" id="modal-ubs">
   <div class="painel-ubs">
     <div class="painel-header">
-      <div><div class="painel-titulo" id="modal-titulo">UBS</div><div class="painel-status" id="modal-status">—</div></div>
+      <div><div class="painel-titulo" id="modal-titulo">USF</div><div class="painel-status" id="modal-status">—</div></div>
       <button class="btn-fechar" onclick="fecharModal()">✕ Fechar</button>
     </div>
     <div class="grid-setores" id="grid-setores"></div>
+
+    <div class="secao-docs-modal">
+      <h3>📁 Documentos</h3>
+      <div class="filtros-doc">
+        <button class="ativo" data-filtro="todos" onclick="filtrarDocs(this)">Todos</button>
+        <button data-filtro="filial" onclick="filtrarDocs(this)">Da USF</button>
+        <button data-filtro="matriz" onclick="filtrarDocs(this)">Da Matriz</button>
+      </div>
+      <div class="doc-lista" id="doc-lista">
+        <div class="doc-vazio">Nenhum documento.</div>
+      </div>
+    </div>
   </div>
 </div>
+
+<div class="modal-overlay" id="modal-envio">
+  <div class="painel-envio">
+    <h3>📎 Enviar documento para uma USF</h3>
+    <label>USF de destino</label>
+    <select id="select-destino"></select>
+    <label>Arquivos (múltiplos, até 10 MB cada)</label>
+    <input type="file" id="input-arquivos-envio" multiple accept="*/*">
+    <div id="status-envio" style="font-size:11px;color:#94a3b8;margin-top:8px;min-height:16px;"></div>
+    <div class="acoes">
+      <button class="btn-fechar" onclick="fecharEnvioDoc()">Cancelar</button>
+      <button class="btn-acao roxo" onclick="enviarDocMatriz()">📤 Enviar</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
 <script>
+const SUPABASE_URL = 'https://gtmgqvoesezshgsthxhr.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_9v7pBfemMd0MR8E55Tkt4g_oknrNWrc';
+const BUCKET = 'ubs-documentos';
+const LIMITE_MB = 10;
+
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
 let ubsMap = {}, ubsSelecionada = null, ws = null;
+let listaUSF = [];
 let somLigado = false;
 let audioCtx = null;
+let filtroDocAtual = 'todos';
 
 function tocarBip() {
   if (!somLigado) return;
@@ -146,6 +212,7 @@ function handleMsg(msg) {
   switch (msg.type) {
     case 'estado_inicial':
       msg.ubs.forEach(u => { ubsMap[u.id] = u; });
+      if (msg.listaUSF) { listaUSF = msg.listaUSF; preencherSelectDestino(); }
       renderGrid();
       break;
     case 'ubs_registrada':
@@ -187,6 +254,27 @@ function handleMsg(msg) {
         if (ubsSelecionada === ubs.id) renderSetores(ubs);
       }
       break;
+    case 'documento_recebido':
+      if (ubsMap[msg.ubs_id]) {
+        const ubs = ubsMap[msg.ubs_id];
+        if (!ubs.documentos) ubs.documentos = [];
+        msg.documentos.forEach(doc => {
+          ubs.documentos.unshift({
+            ...doc,
+            setor_id: msg.setor_id,
+            setor_nome: msg.setor_nome,
+            origem: msg.origem,
+            ts: new Date().toISOString()
+          });
+        });
+        if (msg.origem === 'filial') {
+          ubs.docsNaoLidos = (ubs.docsNaoLidos || 0) + msg.documentos.length;
+          tocarBip();
+        }
+        renderGrid();
+        if (ubsSelecionada === ubs.id) renderDocs(ubs);
+      }
+      break;
     case 'aviso':
     case 'aviso_enviado':
       mostrarAviso(msg.aviso);
@@ -198,22 +286,42 @@ function handleMsg(msg) {
 function renderGrid() {
   const grid = document.getElementById('grid-ubs');
   const lista = Object.values(ubsMap).sort((a, b) => a.nome.localeCompare(b.nome));
+
   if (lista.length === 0) {
-    grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:#64748b;padding:40px;">Nenhuma UBS conectada ainda.</div>';
+    grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:#64748b;padding:40px;">Nenhuma USF conectada ainda.</div>';
     atualizaStats();
     return;
   }
-  grid.innerHTML = '';
+
+  const porRegiao = {};
   lista.forEach(ubs => {
-    const card = document.createElement('div');
-    card.className = `ubs-card ${ubs.online ? 'online' : 'offline'} ${ubs.piscando ? 'piscando' : ''}`;
-    card.onclick = () => abrirModal(ubs.id);
-    card.innerHTML = `
-      <div class="ubs-nome">${ubs.nome}</div>
-      <div class="ubs-status"><span class="dot ${ubs.online ? 'online' : 'offline'}"></span><span>${ubs.online ? 'Online' : 'Offline'}</span></div>
-      ${ubs.novosDados > 0 ? `<div class="badge-novo">${ubs.novosDados}</div>` : ''}`;
-    grid.appendChild(card);
+    const r = ubs.regiao || 'Sem região';
+    if (!porRegiao[r]) porRegiao[r] = [];
+    porRegiao[r].push(ubs);
   });
+
+  grid.innerHTML = '';
+  const ordemRegioes = ['Costa Norte', 'Região Central', 'Costa Sul', 'Sem região'];
+  ordemRegioes.forEach(reg => {
+    if (!porRegiao[reg] || porRegiao[reg].length === 0) return;
+    const header = document.createElement('div');
+    header.className = 'region-header';
+    header.textContent = `📍 ${reg}`;
+    grid.appendChild(header);
+
+    porRegiao[reg].forEach(ubs => {
+      const card = document.createElement('div');
+      card.className = `ubs-card ${ubs.online ? 'online' : 'offline'} ${ubs.piscando ? 'piscando' : ''}`;
+      card.onclick = () => abrirModal(ubs.id);
+      card.innerHTML = `
+        <div class="ubs-nome">${ubs.nome}</div>
+        <div class="ubs-status"><span class="dot ${ubs.online ? 'online' : 'offline'}"></span><span>${ubs.online ? 'Online' : 'Offline'}</span></div>
+        ${ubs.novosDados > 0 ? `<div class="badge-novo">${ubs.novosDados}</div>` : ''}
+        ${ubs.docsNaoLidos > 0 ? `<div class="badge-doc">${ubs.docsNaoLidos}</div>` : ''}`;
+      grid.appendChild(card);
+    });
+  });
+
   atualizaStats();
 }
 
@@ -222,18 +330,20 @@ function atualizaStats() {
   document.getElementById('stat-online').textContent = lista.filter(u => u.online).length;
   document.getElementById('stat-offline').textContent = lista.length - lista.filter(u => u.online).length;
   document.getElementById('stat-novos').textContent = lista.reduce((a, u) => a + (u.novosDados || 0), 0);
+  document.getElementById('stat-docs').textContent = lista.reduce((a, u) => a + (u.docsNaoLidos || 0), 0);
 }
 
 function abrirModal(ubsId) {
   const ubs = ubsMap[ubsId];
   if (!ubs) return;
 
-  // avisa o servidor que os novos dados foram lidos (não volta ao recarregar)
   fetch('/api/marcar-lido', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ ubs_id: ubsId })
   }).catch(() => {});
+
+  if (ubs.docsNaoLidos > 0) ubs.docsNaoLidos = 0;
 
   ubsSelecionada = ubsId;
   ubs.novosDados = 0;
@@ -241,6 +351,7 @@ function abrirModal(ubsId) {
   document.getElementById('modal-titulo').textContent = ubs.nome;
   document.getElementById('modal-status').innerHTML = `<span class="dot ${ubs.online ? 'online' : 'offline'}"></span> ${ubs.online ? 'Online' : 'Offline'}`;
   renderSetores(ubs);
+  renderDocs(ubs);
   document.getElementById('modal-ubs').classList.add('ativo');
   renderGrid();
 }
@@ -276,6 +387,43 @@ function renderSetores(ubs) {
   });
 }
 
+function renderDocs(ubs) {
+  const lista = document.getElementById('doc-lista');
+  let docs = ubs.documentos || [];
+
+  if (filtroDocAtual === 'filial') docs = docs.filter(d => d.origem === 'filial');
+  if (filtroDocAtual === 'matriz') docs = docs.filter(d => d.origem === 'matriz');
+
+  if (docs.length === 0) {
+    lista.innerHTML = '<div class="doc-vazio">Nenhum documento.</div>';
+    return;
+  }
+
+  lista.innerHTML = '';
+  docs.slice(0, 50).forEach(d => {
+    const item = document.createElement('div');
+    item.className = `doc-item-modal ${d.origem === 'matriz' ? 'matriz' : ''}`;
+    const tamanho = d.tamanho ? ` • ${(d.tamanho/1024).toFixed(0)} KB` : '';
+    const data = d.ts ? new Date(d.ts).toLocaleString('pt-BR') : '';
+    const origemTxt = d.origem === 'matriz' ? '📤 Enviado pela Matriz' : `📥 Recebido de ${d.setor_nome || 'setor'}`;
+    item.innerHTML = `
+      <div class="info">
+        <div class="nome">📄 ${d.nome}</div>
+        <div class="meta">${origemTxt} • ${data}${tamanho}</div>
+      </div>
+      <a href="${d.url}" target="_blank" rel="noopener">Baixar</a>`;
+    lista.appendChild(item);
+  });
+}
+
+function filtrarDocs(btn) {
+  document.querySelectorAll('.filtros-doc button').forEach(b => b.classList.remove('ativo'));
+  btn.classList.add('ativo');
+  filtroDocAtual = btn.dataset.filtro;
+  const ubs = ubsMap[ubsSelecionada];
+  if (ubs) renderDocs(ubs);
+}
+
 function toggleHistorico(el) {
   const lista = el.nextElementSibling;
   lista.classList.toggle('aberto');
@@ -287,31 +435,88 @@ function toggleHistorico(el) {
 function fecharModal() {
   document.getElementById('modal-ubs').classList.remove('ativo');
   ubsSelecionada = null;
+  filtroDocAtual = 'todos';
+  document.querySelectorAll('.filtros-doc button').forEach((b, i) => {
+    b.classList.toggle('ativo', i === 0);
+  });
 }
 
-function enviarAviso(p) {
-  const textos = {
-    info:    { titulo: 'Campanha de vacinação', mensagem: 'Campanha de vacinação inicia', prioridade: 'info' },
-    alerta:  { titulo: 'Estoque baixo',         mensagem: 'Estoque baixo em 5 UBSs', prioridade: 'alerta' },
-    urgente: { titulo: 'Surtos suspeitos',      mensagem: 'Surtos suspeitos - notificar em 2h', prioridade: 'urgente' }
-  };
-  const aviso = textos[p];
-  if (ws && ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify({ type: 'aviso', aviso }));
-  } else {
-    console.warn('WebSocket não conectado — aviso não enviado');
+function preencherSelectDestino() {
+  const sel = document.getElementById('select-destino');
+  if (listaUSF.length === 0) return;
+
+  const regioes = {};
+  listaUSF.forEach(u => {
+    if (!regioes[u.regiao]) regioes[u.regiao] = [];
+    regioes[u.regiao].push(u);
+  });
+
+  sel.innerHTML = '<option value="">— Selecione a USF —</option>';
+  Object.keys(regioes).forEach(reg => {
+    const optgroup = document.createElement('optgroup');
+    optgroup.label = reg;
+    regioes[reg].forEach(u => {
+      const opt = document.createElement('option');
+      opt.value = u.id;
+      opt.textContent = u.nome;
+      optgroup.appendChild(opt);
+    });
+    sel.appendChild(optgroup);
+  });
+}
+
+function abrirEnvioDoc() {
+  document.getElementById('modal-envio').classList.add('ativo');
+  document.getElementById('input-arquivos-envio').value = '';
+  document.getElementById('status-envio').textContent = '';
+}
+
+function fecharEnvioDoc() {
+  document.getElementById('modal-envio').classList.remove('ativo');
+}
+
+async function enviarDocMatriz() {
+  const ubsIdDestino = document.getElementById('select-destino').value;
+  const input = document.getElementById('input-arquivos-envio');
+  const arquivos = Array.from(input.files);
+  const status = document.getElementById('status-envio');
+
+  if (!ubsIdDestino) {
+    status.textContent = '❌ Selecione uma USF de destino.';
+    return;
   }
-}
+  if (arquivos.length === 0) {
+    status.textContent = '❌ Selecione pelo menos um arquivo.';
+    return;
+  }
 
-function mostrarAviso(aviso) {
-  const b = document.getElementById('aviso-banner');
-  const t = document.getElementById('aviso-texto');
-  t.textContent = `[${aviso.prioridade.toUpperCase()}] ${aviso.mensagem}`;
-  b.className = 'aviso-banner ativo' + (aviso.prioridade === 'urgente' ? ' urgente' : '');
-  if (aviso.prioridade !== 'urgente') setTimeout(() => b.classList.remove('ativo'), 12000);
-}
+  for (const f of arquivos) {
+    if (f.size > LIMITE_MB * 1024 * 1024) {
+      status.textContent = `❌ "${f.name}" excede ${LIMITE_MB}MB (${(f.size/1024/1024).toFixed(1)}MB).`;
+      return;
+    }
+  }
 
-conectarWS();
-</script>
-</body>
-</html>
+  status.textContent = `⏳ Enviando ${arquivos.length} arquivo(s)...`;
+
+  const documentos = [];
+  for (const f of arquivos) {
+    const nome = `matriz/${ubsIdDestino}/${Date.now()}-${f.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+    try {
+      const { error } = await supabaseClient.storage
+        .from(BUCKET)
+        .upload(nome, f, { cacheControl: '3600', upsert: false });
+
+      if (error) throw error;
+
+      const { data: urlData } = supabaseClient.storage.from(BUCKET).getPublicUrl(nome);
+
+      documentos.push({
+        nome: f.name,
+        tamanho: f.size,
+        url: urlData.publicUrl,
+        path: nome,
+        ts: new Date().toISOString()
+      });
+    } catch (e) {
+      status.textContent = `❌
