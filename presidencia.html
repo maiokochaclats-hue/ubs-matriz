@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#0f172a">
+<title>Presidência — Fundação São Sebastião</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: system-ui, sans-serif; background: #0f172a; color: #e2e8f0; min-height: 100vh; padding: 20px; }
+  .container { max-width: 1100px; margin: 0 auto; }
+  .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; padding: 16px 20px; background: #1e293b; border-radius: 12px; border: 1px solid #334155; }
+  h1 { font-size: 20px; color: #f1f5f9; }
+  h2 { font-size: 13px; color: #94a3b8; font-weight: normal; margin-top: 4px; }
+  .btn { background: #3b82f6; border: none; color: white; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 600; text-decoration: none; display: inline-block; }
+  .btn.vermelho { background: #7f1d1d; }
+  .btn.roxo { background: #6d28d9; }
+  .btn:hover { opacity: 0.9; }
+  .card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 32px; text-align: center; margin-bottom: 20px; }
+  .card h3 { font-size: 24px; color: #f1f5f9; margin-bottom: 8px; }
+  .card p { color: #94a3b8; font-size: 14px; margin-bottom: 20px; }
+  .icone { font-size: 56px; margin-bottom: 16px; display: block; }
+  .info-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 24px; }
+  .info-box { background: #1e293b; border: 1px solid #334155; border-radius: 10px; padding: 20px; text-align: center; }
+  .info-box .num { font-size: 32px; font-weight: bold; color: #3b82f6; }
+  .info-box .label { font-size: 12px; color: #94a3b8; margin-top: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .provisorio { background: #7c2d12; border: 1px solid #ea580c; color: #fed7aa; padding: 14px 20px; border-radius: 10px; font-size: 13px; margin-bottom: 20px; }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="topbar">
+    <div>
+      <h1>🏛️ Painel da Presidência</h1>
+      <h2 id="usuario-info">Carregando...</h2>
+    </div>
+    <div>
+      <a href="/admin" class="btn roxo">⚙️ Administração</a>
+      <button class="btn vermelho" onclick="sair()">🚪 Sair</button>
+    </div>
+  </div>
+
+  <div class="provisorio">
+    ⚠️ <b>Etapa 1 concluída.</b> Este painel será expandido na Etapa 2 com:
+    visão de todas as diretorias, monitoramento em tempo real, envio de mensagens e documentos.
+  </div>
+
+  <div class="card">
+    <span class="icone">🏛️</span>
+    <h3 id="nome-presidente">Bem-vindo(a)</h3>
+    <p>Você tem acesso total ao sistema</p>
+  </div>
+
+  <div class="info-grid">
+    <div class="info-box"><div class="num" id="num-dir">—</div><div class="label">Diretorias</div></div>
+    <div class="info-box"><div class="num" id="num-unid">—</div><div class="label">Unidades</div></div>
+    <div class="info-box"><div class="num" id="num-apoio">—</div><div class="label">Órgãos de Apoio</div></div>
+  </div>
+</div>
+
+<script>
+async function carregarInfo() {
+  try {
+    const token = localStorage.getItem('token_ubs');
+    const res = await fetch('/api/admin/estado', {
+      headers: { 'Cookie': 'token=' + token }
+    });
+    if (!res.ok) { location.href = '/'; return; }
+    const data = await res.json();
+    const e = data.estado;
+
+    document.getElementById('nome-presidente').textContent = e.presidencia.nome;
+    document.getElementById('usuario-info').textContent = e.presidencia.cargo + ' • usuário: ' + e.presidencia.usuario;
+    document.getElementById('num-dir').textContent = e.diretorias.length;
+    document.getElementById('num-apoio').textContent = e.orgaos_apoio.length;
+
+    let totalUnid = 0;
+    e.diretorias.forEach(d => totalUnid += d.unidades.length);
+    document.getElementById('num-unid').textContent = totalUnid;
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+function sair() {
+  document.cookie = 'token=; path=/; max-age=0';
+  localStorage.clear();
+  location.href = '/';
+}
+
+carregarInfo();
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js').catch(() => {});
+}
+</script>
+</body>
+</html>
