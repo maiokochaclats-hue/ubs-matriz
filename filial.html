@@ -99,6 +99,7 @@ let ws = null;
 let hb = null;
 let listaUSF = [];
 let documentosRecebidos = [];
+let autoRegistroFeito = false;
 
 const SETORES = [
   { id: 'recepcao',      nome: 'Recepção',      campos: ['atendimentos', 'fila'] },
@@ -142,11 +143,23 @@ async function carregarUSFs() {
       sel.appendChild(optgroup);
     });
 
+    // ===== AUTO-REGISTRO VIA URL =====
     const params = new URLSearchParams(location.search);
     const usfParam = params.get('usf');
     if (usfParam && listaUSF.find(u => u.id === usfParam)) {
       sel.value = usfParam;
-      log(`🔗 USF pré-selecionada pela URL: ${usfParam}`, 'ok');
+      log(`🔗 USF detectada pela URL: ${usfParam}`, 'ok');
+      log(`⚡ Auto-conectando em 1 segundo...`, 'info');
+
+      if (!autoRegistroFeito) {
+        autoRegistroFeito = true;
+        setTimeout(() => {
+          if (!online) {
+            log('🚀 Registrando automaticamente...', 'info');
+            registrar();
+          }
+        }, 1000);
+      }
     }
   } catch (e) {
     sel.innerHTML = '<option value="">Erro ao carregar lista</option>';
