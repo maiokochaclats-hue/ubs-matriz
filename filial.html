@@ -2,6 +2,8 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#0f172a">
 <title>Painel Filial USF</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -122,15 +124,12 @@ function log(msg, tipo = 'info') {
   d.scrollTop = d.scrollHeight;
 }
 
-// ============ FILA PERSISTENTE ============
 function carregarFila() {
   try {
     const raw = localStorage.getItem(CHAVE_FILA);
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed)) {
-        filaDocumentos = parsed.filter(p => p.ubs_id === ubsId || !p.ubs_id);
-        // remove os que não pertencem a esta USF
         filaDocumentos = parsed.filter(p => !p.ubs_id || p.ubs_id === ubsId);
         atualizarInfoFila();
       }
@@ -160,7 +159,7 @@ function atualizarInfoFila() {
 }
 
 function enfileirarDocumento(payload) {
-  payload.ubs_id = ubsId; // garante vínculo com a USF
+  payload.ubs_id = ubsId;
   filaDocumentos.push(payload);
   salvarFila();
   tentarEnviarFila();
@@ -174,7 +173,6 @@ function tentarEnviarFila() {
   let enviados = 0;
 
   for (const payload of filaDocumentos) {
-    // só envia payloads da própria USF
     if (payload.ubs_id !== ubsId) {
       restantes.push(payload);
       continue;
@@ -195,7 +193,6 @@ function tentarEnviarFila() {
   }
 }
 
-// ============ LISTA DE USFs ============
 async function carregarUSFs() {
   const sel = document.getElementById('select-usf');
   try {
@@ -222,7 +219,6 @@ async function carregarUSFs() {
       sel.appendChild(optgroup);
     });
 
-    // AUTO-REGISTRO VIA URL
     const params = new URLSearchParams(location.search);
     const usfParam = params.get('usf');
     if (usfParam && listaUSF.find(u => u.id === usfParam)) {
@@ -246,7 +242,6 @@ async function carregarUSFs() {
   }
 }
 
-// ============ REGISTRAR ============
 async function registrar() {
   const sel = document.getElementById('select-usf');
   const usfId = sel.value;
@@ -291,7 +286,6 @@ async function registrar() {
     document.getElementById('secao-docs').style.display = 'block';
     log(`✅ Registrada como ${ubsNome}`, 'ok');
 
-    // carrega fila após definir ubsId
     carregarFila();
 
     renderSetores();
@@ -302,7 +296,6 @@ async function registrar() {
   }
 }
 
-// ============ SETORES ============
 function renderSetores() {
   const g = document.getElementById('grid-setores');
   g.innerHTML = '';
@@ -344,7 +337,6 @@ function enviarDados(setorId) {
   }
 }
 
-// ============ ANEXAR DOCUMENTO ============
 function anexarSetor(setorId, setorNome) {
   if (!online) return log('❌ Não conectada ao servidor', 'err');
 
@@ -406,7 +398,6 @@ function anexarSetor(setorId, setorNome) {
   input.click();
 }
 
-// ============ WEBSOCKET ============
 function conectarWS() {
   const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
   ws = new WebSocket(`${proto}//${location.host}`);
@@ -415,7 +406,6 @@ function conectarWS() {
     log('🔌 WebSocket conectado', 'ok');
     ws.send(JSON.stringify({ type: 'ola_filial', ubs_id: ubsId }));
 
-    // reenvia fila acumulada
     setTimeout(() => {
       if (filaDocumentos.length > 0) {
         log(`🔄 Reenviando ${filaDocumentos.length} documento(s) pendente(s)...`, 'info');
@@ -447,7 +437,6 @@ function conectarWS() {
   };
 }
 
-// ============ DOCS RECEBIDOS ============
 function adicionarDocumentos(docs) {
   docs.forEach(d => documentosRecebidos.unshift(d));
   renderDocumentos();
@@ -475,7 +464,6 @@ function renderDocumentos() {
   });
 }
 
-// ============ HEARTBEAT ============
 function iniciarHeartbeat() {
   clearInterval(hb);
   hb = setInterval(() => {
@@ -485,8 +473,11 @@ function iniciarHeartbeat() {
   }, 2000);
 }
 
-// ============ INICIALIZA ============
 carregarUSFs();
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js').catch(() => {});
+}
 </script>
 </body>
 </html>
