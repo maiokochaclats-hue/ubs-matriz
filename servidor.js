@@ -7,12 +7,26 @@ const crypto = require('crypto');
 // Porta dinâmica (Render fornece PORT). Local usa 3000.
 const PORTA = process.env.PORT || 3000;
 const ARQUIVO_DADOS = path.join(__dirname, 'dados.json');
-const MAX_HISTORICO = 50; // por setor
+const MAX_HISTORICO = 50;
 const SENHA_MATRIZ = 'ubs2026'; // ← troque pela sua senha
-const TOKENS = new Set(); // tokens válidos em memória
+const TOKENS = new Set();
+const TIMEOUT_HEARTBEAT = 15 * 1000; // 15s sem heartbeat = offline
 
 let ubsMap = {};
 const clientesWS = new Set();
+
+// ---------- Timeout de heartbeat ----------
+setInterval(() => {
+  const agora = Date.now();
+  Object.values(ubsMap).forEach(ubs => {
+    if (ubs.online && ubs.ultimoHeartbeat && (agora - ubs.ultimoHeartbeat) > TIMEOUT_HEARTBEAT) {
+      ubs.online = false;
+      broadcast({ type: 'ubs_offline', ubs_id: ubs.id });
+      salvarDados();
+      console.log(`🔴 UBS offline por inatividade: ${ubs.nome}`);
+    }
+  });
+}, 5000);
 
 // ---------- Persistência ----------
 function carregarDados() {
@@ -20,6 +34,8 @@ function carregarDados() {
     if (fs.existsSync(ARQUIVO_DADOS)) {
       const raw = fs.readFileSync(ARQUIVO_DADOS, 'utf8');
       ubsMap = JSON.parse(raw);
+      // ao carregar, considera todas offline (o heartbeat vai reativar)
+      Object.values(ubsMap).forEach(u => { u.online = false; });
       console.log(`💾 Dados carregados: ${Object.keys(ubsMap).length} UBS`);
     }
   } catch (e) {
@@ -40,7 +56,7 @@ function salvarDados() {
   }, 500);
 }
 
-// ---------- WebSocket manual (sem libs) ----------
+// ---------- WebSocket manual ----------
 function aceitarWS(req, socket) {
   const key = req.headers['sec-websocket-key'];
   const accept = crypto.createHash('sha1')
@@ -124,6 +140,8 @@ function tratarMensagem(cliente, msg) {
       if (setor.historico.length > MAX_HISTORICO) setor.historico.length = MAX_HISTORICO;
     }
     ubs.novosDados = (ubs.novosDados || 0) + 1;
+    ubs.ultimoHeartbeat = Date.now();
+    ubs.online = true;
     salvarDados();
     broadcast({ type: 'novo_dado', ubs_id: msg.ubs_id, setor_id: msg.setor_id, dados: msg.dados });
     enviarWS(cliente, { type: 'parar_piscar', ubs_id: msg.ubs_id, setor_id: msg.setor_id });
@@ -132,10 +150,13 @@ function tratarMensagem(cliente, msg) {
 
   if (msg.type === 'heartbeat' && msg.ubs_id) {
     const ubs = ubsMap[msg.ubs_id];
-    if (ubs && !ubs.online) {
-      ubs.online = true;
-      broadcast({ type: 'ubs_online', ubs_id: ubs.id });
-      salvarDados();
+    if (ubs) {
+      ubs.ultimoHeartbeat = Date.now();
+      if (!ubs.online) {
+        ubs.online = true;
+        broadcast({ type: 'ubs_online', ubs_id: ubs.id });
+        salvarDados();
+      }
     }
     return;
   }
@@ -170,7 +191,6 @@ const server = http.createServer(async (req, res) => {
 
   const url = req.url.split('?')[0];
 
-  // WebSocket upgrade
   if (req.headers.upgrade === 'websocket') return aceitarWS(req, req.socket);
 
   // ---------- Autenticação ----------
@@ -179,7 +199,6 @@ const server = http.createServer(async (req, res) => {
     if (body.senha === SENHA_MATRIZ) {
       const token = crypto.randomBytes(24).toString('hex');
       TOKENS.add(token);
-      // expira em 24h
       setTimeout(() => TOKENS.delete(token), 24 * 60 * 60 * 1000);
       return json(res, 200, { ok: true, token });
     }
@@ -194,6 +213,17 @@ const server = http.createServer(async (req, res) => {
   if (url === '/api/logout' && req.method === 'POST') {
     const body = await lerCorpo(req);
     TOKENS.delete(body.token);
+    return json(res, 200, { ok: true });
+  }
+
+  // ---------- Marcar lido (zera novosDados) ----------
+  if (url === '/api/marcar-lido' && req.method === 'POST') {
+    const body = await lerCorpo(req);
+    const ubs = ubsMap[body.ubs_id];
+    if (ubs) {
+      ubs.novosDados = 0;
+      salvarDados();
+    }
     return json(res, 200, { ok: true });
   }
 
@@ -217,6 +247,7 @@ const server = http.createServer(async (req, res) => {
       id,
       nome: body.nome,
       online: true,
+      ultimoHeartbeat: Date.now(),
       setores: setoresNovos,
       novosDados: existente?.novosDados || 0
     };
@@ -242,7 +273,6 @@ const server = http.createServer(async (req, res) => {
   }
 
   // ---------- Páginas HTML ----------
-  // /matriz exige login
   if (url === '/matriz') {
     const cookie = req.headers.cookie || '';
     const token = cookie.match(/token=([a-f0-9]+)/)?.[1];
@@ -252,10 +282,7 @@ const server = http.createServer(async (req, res) => {
     return htmlFile(res, 'matriz.html');
   }
 
-  // raiz cai no login
   if (url === '/') return htmlFile(res, 'login.html');
-
-  // filial aberta
   if (url === '/filial') return htmlFile(res, 'filial.html');
 
   res.writeHead(404); res.end('Rota não encontrada');
@@ -279,9 +306,7 @@ server.listen(PORTA, '0.0.0.0', () => {
   console.log('   (deixe esta janela aberta)\n');
 });
 
-// ---------- Keep-alive para o Render (evita hibernar) ----------
-// O Render define RENDER_EXTERNAL_URL automaticamente.
-// A cada 10 minutos o servidor faz um GET em si mesmo para manter o serviço acordado.
+// ---------- Keep-alive para o Render ----------
 const URL_EXTERNA = process.env.RENDER_EXTERNAL_URL;
 if (URL_EXTERNA) {
   setInterval(() => {
@@ -290,6 +315,6 @@ if (URL_EXTERNA) {
     }).on('error', (err) => {
       console.error('[keep-alive] Erro no ping:', err.message);
     });
-  }, 10 * 60 * 1000); // 10 minutos
+  }, 10 * 60 * 1000);
   console.log(`🔁 Keep-alive ativo para: ${URL_EXTERNA}`);
 }
