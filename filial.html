@@ -36,16 +36,13 @@
   .secao-docs { margin-top: 24px; background: #1e293b; border: 1px solid #334155; border-radius: 10px; padding: 16px; }
   .secao-docs h3 { font-size: 15px; color: #f1f5f9; margin-bottom: 4px; }
   .secao-docs .sub { font-size: 11px; color: #94a3b8; margin-bottom: 12px; }
-  .doc-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: #0f172a; border-radius: 6px; margin-bottom: 6px; font-size: 12px; border-left: 3px solid #3b82f6; }
-  .doc-item.matriz { border-left-color: #a855f7; }
+  .doc-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: #0f172a; border-radius: 6px; margin-bottom: 6px; font-size: 12px; border-left: 3px solid #a855f7; }
   .doc-item .info { flex: 1; min-width: 0; }
   .doc-item .nome { color: #e2e8f0; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .doc-item .meta { color: #64748b; font-size: 10px; margin-top: 2px; }
   .doc-item a { color: #3b82f6; text-decoration: none; padding: 4px 10px; background: #1e3a8a; border-radius: 4px; font-size: 11px; white-space: nowrap; margin-left: 8px; }
   .doc-item a:hover { background: #1d4ed8; }
   .doc-vazio { color: #64748b; font-size: 12px; text-align: center; padding: 16px; }
-  .upload-status { font-size: 11px; color: #94a3b8; margin-top: 6px; }
-  .badge-novo-doc { background: #a855f7; color: white; font-size: 9px; padding: 2px 6px; border-radius: 8px; margin-left: 6px; font-weight: bold; }
 </style>
 </head>
 <body>
@@ -83,19 +80,16 @@
   <div class="log" id="log"></div>
 </div>
 
-<!-- Biblioteca Supabase -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
 <script>
-// ============ CONFIG SUPABASE ============
 const SUPABASE_URL = 'https://gtmgqvoesezshgsthxhr.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_9v7pBfemMd0MR8E55Tkt4g_oknrNWrc';
 const BUCKET = 'ubs-documentos';
 const LIMITE_MB = 10;
 
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// ============ ESTADO ============
 let ubsId = null;
 let ubsNome = null;
 let ubsRegiao = null;
@@ -104,6 +98,7 @@ let online = false;
 let ws = null;
 let hb = null;
 let listaUSF = [];
+let documentosRecebidos = [];
 
 const SETORES = [
   { id: 'recepcao',      nome: 'Recepção',      campos: ['atendimentos', 'fila'] },
@@ -112,7 +107,6 @@ const SETORES = [
   { id: 'administracao', nome: 'Administração', campos: ['processos', 'oficios'] }
 ];
 
-// ============ LOG ============
 function log(msg, tipo = 'info') {
   const d = document.getElementById('log');
   const e = document.createElement('div');
@@ -122,15 +116,13 @@ function log(msg, tipo = 'info') {
   d.scrollTop = d.scrollHeight;
 }
 
-// ============ CARREGA LISTA DE USFs ============
 async function carregarUSFs() {
   const sel = document.getElementById('select-usf');
   try {
-    const res = await fetch((location.origin) + '/api/usfs');
+    const res = await fetch(location.origin + '/api/usfs');
     const data = await res.json();
     listaUSF = data.usfs || [];
 
-    // Agrupa por região
     const regioes = {};
     listaUSF.forEach(u => {
       if (!regioes[u.regiao]) regioes[u.regiao] = [];
@@ -150,7 +142,6 @@ async function carregarUSFs() {
       sel.appendChild(optgroup);
     });
 
-    // URL personalizada: ?usf=usf-01
     const params = new URLSearchParams(location.search);
     const usfParam = params.get('usf');
     if (usfParam && listaUSF.find(u => u.id === usfParam)) {
@@ -163,7 +154,6 @@ async function carregarUSFs() {
   }
 }
 
-// ============ REGISTRAR ============
 async function registrar() {
   const sel = document.getElementById('select-usf');
   const usfId = sel.value;
@@ -216,7 +206,6 @@ async function registrar() {
   }
 }
 
-// ============ RENDER SETORES ============
 function renderSetores() {
   const g = document.getElementById('grid-setores');
   g.innerHTML = '';
@@ -237,7 +226,6 @@ function renderSetores() {
   });
 }
 
-// ============ ENVIAR DADOS DE SETOR ============
 function enviarDados(setorId) {
   if (!online) return log('❌ Não conectada ao servidor', 'err');
   const setor = SETORES.find(s => s.id === setorId);
@@ -259,7 +247,6 @@ function enviarDados(setorId) {
   }
 }
 
-// ============ ANEXAR DOCUMENTO A SETOR ============
 function anexarSetor(setorId, setorNome) {
   if (!online) return log('❌ Não conectada ao servidor', 'err');
 
@@ -272,7 +259,6 @@ function anexarSetor(setorId, setorNome) {
     const arquivos = Array.from(input.files);
     if (arquivos.length === 0) return;
 
-    // Valida tamanho
     for (const f of arquivos) {
       if (f.size > LIMITE_MB * 1024 * 1024) {
         return log(`❌ "${f.name}" excede ${LIMITE_MB}MB (${(f.size/1024/1024).toFixed(1)}MB)`, 'err');
@@ -285,13 +271,13 @@ function anexarSetor(setorId, setorNome) {
     for (const f of arquivos) {
       const nome = `${ubsId}/${setorId}/${Date.now()}-${f.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
       try {
-        const { data, error } = await supabase.storage
+        const { error } = await supabaseClient.storage
           .from(BUCKET)
           .upload(nome, f, { cacheControl: '3600', upsert: false });
 
         if (error) throw error;
 
-        const { data: urlData } = supabase.storage.from(BUCKET).getPublicUrl(nome);
+        const { data: urlData } = supabaseClient.storage.from(BUCKET).getPublicUrl(nome);
 
         documentos.push({
           nome: f.name,
@@ -322,7 +308,6 @@ function anexarSetor(setorId, setorNome) {
   input.click();
 }
 
-// ============ WEBSOCKET ============
 function conectarWS() {
   const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
   ws = new WebSocket(`${proto}//${location.host}`);
@@ -355,9 +340,6 @@ function conectarWS() {
   };
 }
 
-// ============ LISTA DE DOCUMENTOS RECEBIDOS ============
-let documentosRecebidos = [];
-
 function adicionarDocumentos(docs) {
   docs.forEach(d => documentosRecebidos.unshift(d));
   renderDocumentos();
@@ -372,7 +354,7 @@ function renderDocumentos() {
   lista.innerHTML = '';
   documentosRecebidos.slice(0, 50).forEach(d => {
     const item = document.createElement('div');
-    item.className = 'doc-item matriz';
+    item.className = 'doc-item';
     const tamanho = d.tamanho ? ` • ${(d.tamanho/1024).toFixed(0)} KB` : '';
     const data = d.ts ? new Date(d.ts).toLocaleString('pt-BR') : '';
     item.innerHTML = `
@@ -385,7 +367,6 @@ function renderDocumentos() {
   });
 }
 
-// ============ HEARTBEAT ============
 function iniciarHeartbeat() {
   clearInterval(hb);
   hb = setInterval(() => {
@@ -395,7 +376,6 @@ function iniciarHeartbeat() {
   }, 5000);
 }
 
-// ============ INICIALIZA ============
 carregarUSFs();
 </script>
 </body>
