@@ -1,3 +1,4 @@
+[matriz.html](https://github.com/user-attachments/files/33233930/matriz.html)
 [package.json](https://github.com/user-attachments/files/33233902/package.json)
 [servidor.js](https://github.com/user-attachments/files/33233907/servidor.js)const http = require('http');
 const https = require('https');
@@ -9,7 +10,316 @@ const crypto = require('crypto');
 const PORTA = process.env.PORT || 3000;
 const ARQUIVO_DADOS = path.join(__dirname, 'dados.json');
 const MAX_HISTORICO = 50; // por setor
-const SENHA_MATRIZ = 'ubs2026'; // ← troque pela sua senha
+const SENHA_MATRIZ = 'ubs2026'; // ← troque pela sua senha<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Matriz UBS</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: system-ui, sans-serif; background: #0f172a; color: #e2e8f0; padding: 20px; }
+  h1 { font-size: 20px; color: #f1f5f9; }
+  h2 { font-size: 13px; color: #94a3b8; font-weight: normal; margin-bottom: 16px; }
+  .matriz { max-width: 1300px; margin: 0 auto; }
+  .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding: 16px 20px; background: #1e293b; border-radius: 12px; border: 1px solid #334155; }
+  .status-servidor { font-size: 12px; padding: 4px 10px; border-radius: 6px; background: #334155; color: #94a3b8; }
+  .status-servidor.ok { background: #14532d; color: #86efac; }
+  .status-servidor.err { background: #7f1d1d; color: #fecaca; }
+  .stats { display: flex; gap: 20px; font-size: 13px; align-items: center; }
+  .stat-online { color: #22c55e; } .stat-offline { color: #ef4444; } .stat-novos { color: #3b82f6; }
+  .toggle-som { background: #334155; border: none; color: #e2e8f0; padding: 4px 10px; border-radius: 6px; cursor: pointer; font-size: 12px; }
+  .toggle-som.ativo { background: #16a34a; color: white; }
+  .aviso-banner { background: #7c2d12; border: 1px solid #ea580c; color: #fed7aa; padding: 10px 16px; border-radius: 8px; margin-bottom: 16px; font-size: 13px; display: none; align-items: center; gap: 10px; }
+  .aviso-banner.ativo { display: flex; }
+  .aviso-banner.urgente { background: #7f1d1d; border-color: #dc2626; color: #fecaca; animation: pulse-aviso 1.5s infinite; }
+  @keyframes pulse-aviso { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
+  .grid-ubs { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; }
+  .ubs-card { background: #1e293b; border: 2px solid #334155; border-radius: 10px; padding: 12px 10px; cursor: pointer; transition: all 0.2s; text-align: center; position: relative; user-select: none; }
+  .ubs-card:hover { transform: translateY(-2px); border-color: #475569; }
+  .ubs-card.online { border-color: #16a34a; }
+  .ubs-card.offline { border-color: #dc2626; opacity: 0.5; }
+  .ubs-card.piscando { animation: piscar 1s infinite; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.5); }
+  @keyframes piscar { 0%, 100% { background: #1e293b; } 50% { background: #1e3a8a; } }
+  .ubs-nome { font-size: 12px; font-weight: 600; margin-bottom: 6px; color: #f1f5f9; }
+  .ubs-status { font-size: 10px; display: flex; align-items: center; justify-content: center; gap: 4px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  .dot.online { background: #22c55e; box-shadow: 0 0 6px #22c55e; }
+  .dot.offline { background: #ef4444; }
+  .badge-novo { position: absolute; top: -6px; right: -6px; background: #3b82f6; color: white; font-size: 10px; padding: 2px 6px; border-radius: 10px; font-weight: bold; }
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.75); display: none; align-items: center; justify-content: center; z-index: 100; }
+  .modal-overlay.ativo { display: flex; }
+  .painel-ubs { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 24px; width: 780px; max-width: 92vw; max-height: 88vh; overflow-y: auto; }
+  .painel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid #334155; }
+  .painel-titulo { font-size: 18px; font-weight: bold; color: #f1f5f9; }
+  .btn-fechar { background: #334155; border: none; color: #e2e8f0; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 13px; }
+  .grid-setores { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+  .setor-card { background: #0f172a; border: 2px solid #334155; border-radius: 10px; padding: 16px; position: relative; }
+  .setor-card.piscando { animation: piscar-setor 1s infinite; border-color: #3b82f6; }
+  @keyframes piscar-setor { 0%, 100% { background: #0f172a; } 50% { background: #1e3a8a; } }
+  .setor-nome { font-size: 14px; font-weight: 600; color: #f1f5f9; margin-bottom: 8px; }
+  .setor-dados { font-size: 11px; color: #94a3b8; line-height: 1.6; }
+  .setor-dados b { color: #cbd5e1; }
+  .setor-timestamp { font-size: 10px; color: #64748b; margin-top: 8px; font-style: italic; }
+  .badge-setor { position: absolute; top: 8px; right: 8px; background: #3b82f6; color: white; font-size: 9px; padding: 2px 6px; border-radius: 8px; font-weight: bold; }
+  .historico-toggle { font-size: 10px; color: #3b82f6; cursor: pointer; margin-top: 8px; user-select: none; }
+  .historico-lista { margin-top: 8px; border-top: 1px solid #1e293b; padding-top: 8px; max-height: 160px; overflow-y: auto; display: none; }
+  .historico-lista.aberto { display: block; }
+  .historico-item { font-size: 10px; color: #94a3b8; padding: 4px 0; border-bottom: 1px solid #1e293b; }
+  .historico-item .ht { color: #64748b; }
+  .historico-item .hd { color: #cbd5e1; }
+  .barra-acoes { display: flex; gap: 8px; margin-bottom: 16px; }
+  .btn-acao { background: #334155; border: none; color: #e2e8f0; padding: 8px 14px; border-radius: 6px; cursor: pointer; font-size: 12px; }
+  .btn-acao.vermelho { background: #7f1d1d; } .btn-acao.laranja { background: #7c2d12; }
+</style>
+</head>
+<body>
+<div class="matriz">
+  <div class="topbar">
+    <div><h1>🏥 Matriz UBS</h1><h2>Monitoramento em tempo real</h2></div>
+    <div class="stats">
+      <span class="stat-online">🟢 <b id="stat-online">0</b> online</span>
+      <span class="stat-offline">🔴 <b id="stat-offline">0</b> offline</span>
+      <span class="stat-novos">🔵 <b id="stat-novos">0</b> novos</span>
+      <button class="toggle-som" id="toggle-som" onclick="toggleSom()">🔇 Som OFF</button>
+      <span class="status-servidor" id="status-servidor">⚪ Conectando...</span>
+      <button class="toggle-som" onclick="sair()" style="background:#7f1d1d;">🚪 Sair</button>
+    </div>
+  </div>
+  <div class="barra-acoes">
+    <button class="btn-acao" onclick="enviarAviso('info')">📢 Aviso INFO</button>
+    <button class="btn-acao laranja" onclick="enviarAviso('alerta')">⚠️ Aviso ALERTA</button>
+    <button class="btn-acao vermelho" onclick="enviarAviso('urgente')">🚨 Aviso URGENTE</button>
+  </div>
+  <div class="aviso-banner" id="aviso-banner"><span>📢</span><span id="aviso-texto">—</span></div>
+  <div class="grid-ubs" id="grid-ubs"></div>
+</div>
+<div class="modal-overlay" id="modal-ubs">
+  <div class="painel-ubs">
+    <div class="painel-header">
+      <div><div class="painel-titulo" id="modal-titulo">UBS</div><div class="painel-status" id="modal-status">—</div></div>
+      <button class="btn-fechar" onclick="fecharModal()">✕ Fechar</button>
+    </div>
+    <div class="grid-setores" id="grid-setores"></div>
+  </div>
+</div>
+<script>
+let ubsMap = {}, ubsSelecionada = null, ws = null;
+let somLigado = false;
+let audioCtx = null;
+
+function tocarBip() {
+  if (!somLigado) return;
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    o.type = 'sine';
+    o.frequency.value = 880;
+    g.gain.setValueAtTime(0.15, audioCtx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.25);
+    o.connect(g); g.connect(audioCtx.destination);
+    o.start(); o.stop(audioCtx.currentTime + 0.25);
+  } catch (e) {}
+}
+
+function toggleSom() {
+  somLigado = !somLigado;
+  const b = document.getElementById('toggle-som');
+  b.textContent = somLigado ? '🔊 Som ON' : '🔇 Som OFF';
+  b.className = 'toggle-som' + (somLigado ? ' ativo' : '');
+  if (somLigado) tocarBip();
+}
+
+function sair() {
+  // limpa cookie e storage
+  document.cookie = 'token=; path=/; max-age=0';
+  localStorage.removeItem('token_ubs');
+  location.href = '/';
+}
+
+function conectarWS() {
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  ws = new WebSocket(`${proto}//${location.host}`);
+  ws.onopen = () => {
+    setStatus('ok', '🟢 Servidor conectado');
+    ws.send(JSON.stringify({ type: 'ola_matriz' }));
+  };
+  ws.onclose = () => { setStatus('err', '🔴 Desconectado'); setTimeout(conectarWS, 3000); };
+  ws.onerror = () => setStatus('err', '🔴 Erro');
+  ws.onmessage = (ev) => handleMsg(JSON.parse(ev.data));
+}
+
+function setStatus(t, txt) {
+  const el = document.getElementById('status-servidor');
+  el.className = 'status-servidor ' + t;
+  el.textContent = txt;
+}
+
+function handleMsg(msg) {
+  switch (msg.type) {
+    case 'estado_inicial':
+      msg.ubs.forEach(u => { ubsMap[u.id] = u; });
+      renderGrid();
+      break;
+    case 'ubs_registrada':
+      ubsMap[msg.ubs.id] = msg.ubs;
+      renderGrid();
+      break;
+    case 'ubs_online':
+      if (ubsMap[msg.ubs_id]) { ubsMap[msg.ubs_id].online = true; renderGrid(); }
+      break;
+    case 'ubs_offline':
+      if (ubsMap[msg.ubs_id]) { ubsMap[msg.ubs_id].online = false; renderGrid(); }
+      break;
+    case 'novo_dado':
+      if (ubsMap[msg.ubs_id]) {
+        const ubs = ubsMap[msg.ubs_id];
+        ubs.piscando = true;
+        ubs.novosDados = (ubs.novosDados || 0) + 1;
+        const setor = ubs.setores.find(s => s.id === msg.setor_id);
+        if (setor) {
+          setor.piscando = true;
+          setor.dados = { ...setor.dados, ...msg.dados };
+          setor.ultimaAtualizacao = new Date().toISOString();
+          if (!setor.historico) setor.historico = [];
+          setor.historico.unshift({ ts: setor.ultimaAtualizacao, dados: { ...setor.dados } });
+          if (setor.historico.length > 50) setor.historico.length = 50;
+        }
+        renderGrid();
+        if (ubsSelecionada === ubs.id) renderSetores(ubs);
+        tocarBip();
+      }
+      break;
+    case 'parar_piscar':
+      if (ubsMap[msg.ubs_id]) {
+        const ubs = ubsMap[msg.ubs_id];
+        ubs.piscando = false;
+        const setor = ubs.setores.find(s => s.id === msg.setor_id);
+        if (setor) setor.piscando = false;
+        renderGrid();
+        if (ubsSelecionada === ubs.id) renderSetores(ubs);
+      }
+      break;
+    case 'aviso':
+    case 'aviso_enviado':
+      mostrarAviso(msg.aviso);
+      tocarBip();
+      break;
+  }
+}
+
+function renderGrid() {
+  const grid = document.getElementById('grid-ubs');
+  const lista = Object.values(ubsMap).sort((a, b) => a.nome.localeCompare(b.nome));
+  if (lista.length === 0) {
+    grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:#64748b;padding:40px;">Nenhuma UBS conectada ainda.</div>';
+    atualizaStats();
+    return;
+  }
+  grid.innerHTML = '';
+  lista.forEach(ubs => {
+    const card = document.createElement('div');
+    card.className = `ubs-card ${ubs.online ? 'online' : 'offline'} ${ubs.piscando ? 'piscando' : ''}`;
+    card.onclick = () => abrirModal(ubs.id);
+    card.innerHTML = `
+      <div class="ubs-nome">${ubs.nome}</div>
+      <div class="ubs-status"><span class="dot ${ubs.online ? 'online' : 'offline'}"></span><span>${ubs.online ? 'Online' : 'Offline'}</span></div>
+      ${ubs.novosDados > 0 ? `<div class="badge-novo">${ubs.novosDados}</div>` : ''}`;
+    grid.appendChild(card);
+  });
+  atualizaStats();
+}
+
+function atualizaStats() {
+  const lista = Object.values(ubsMap);
+  document.getElementById('stat-online').textContent = lista.filter(u => u.online).length;
+  document.getElementById('stat-offline').textContent = lista.length - lista.filter(u => u.online).length;
+  document.getElementById('stat-novos').textContent = lista.reduce((a, u) => a + (u.novosDados || 0), 0);
+}
+
+function abrirModal(ubsId) {
+  const ubs = ubsMap[ubsId];
+  if (!ubs) return;
+  ubsSelecionada = ubsId;
+  ubs.novosDados = 0;
+  ubs.piscando = false;
+  document.getElementById('modal-titulo').textContent = ubs.nome;
+  document.getElementById('modal-status').innerHTML = `<span class="dot ${ubs.online ? 'online' : 'offline'}"></span> ${ubs.online ? 'Online' : 'Offline'}`;
+  renderSetores(ubs);
+  document.getElementById('modal-ubs').classList.add('ativo');
+  renderGrid();
+}
+
+function renderSetores(ubs) {
+  const grid = document.getElementById('grid-setores');
+  grid.innerHTML = '';
+  if (!ubs.setores || ubs.setores.length === 0) {
+    grid.innerHTML = '<div style="color:#64748b;padding:20px;">Nenhum setor.</div>';
+    return;
+  }
+  ubs.setores.forEach(setor => {
+    const card = document.createElement('div');
+    card.className = `setor-card ${setor.piscando ? 'piscando' : ''}`;
+    const dados = Object.entries(setor.dados || {})
+      .map(([k, v]) => `<div>${k}: <b>${v || '—'}</b></div>`).join('') || '<div style="color:#64748b;">Sem dados</div>';
+    const ts = setor.ultimaAtualizacao ? new Date(setor.ultimaAtualizacao).toLocaleTimeString('pt-BR') : '—';
+
+    const hist = (setor.historico || []).slice(0, 10).map(h => `
+      <div class="historico-item">
+        <span class="ht">${new Date(h.ts).toLocaleString('pt-BR')}</span> —
+        <span class="hd">${Object.entries(h.dados).map(([k,v]) => `${k}: ${v || '—'}`).join(' | ')}</span>
+      </div>`).join('') || '<div style="color:#64748b;font-size:10px;">Sem histórico.</div>';
+
+    card.innerHTML = `
+      ${setor.piscando ? '<div class="badge-setor">NOVO</div>' : ''}
+      <div class="setor-nome">📋 ${setor.nome}</div>
+      <div class="setor-dados">${dados}</div>
+      <div class="setor-timestamp">Atualizado: ${ts}</div>
+      <div class="historico-toggle" onclick="toggleHistorico(this)">▸ Ver histórico (${(setor.historico||[]).length})</div>
+      <div class="historico-lista">${hist}</div>`;
+    grid.appendChild(card);
+  });
+}
+
+function toggleHistorico(el) {
+  const lista = el.nextElementSibling;
+  lista.classList.toggle('aberto');
+  el.textContent = lista.classList.contains('aberto')
+    ? '▾ Ocultar histórico'
+    : `▸ Ver histórico (${lista.children.length})`;
+}
+
+function fecharModal() {
+  document.getElementById('modal-ubs').classList.remove('ativo');
+  ubsSelecionada = null;
+}
+
+function enviarAviso(p) {
+  const textos = {
+    info:    { titulo: 'Campanha de vacinação', mensagem: 'Campanha de vacinação inicia', prioridade: 'info' },
+    alerta:  { titulo: 'Estoque baixo',         mensagem: 'Estoque baixo em 5 UBSs', prioridade: 'alerta' },
+    urgente: { titulo: 'Surtos suspeitos',      mensagem: 'Surtos suspeitos - notificar em 2h', prioridade: 'urgente' }
+  };
+  const aviso = textos[p];
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: 'aviso', aviso }));
+  } else {
+    console.warn('WebSocket não conectado — aviso não enviado');
+  }
+}
+
+function mostrarAviso(aviso) {
+  const b = document.getElementById('aviso-banner');
+  const t = document.getElementById('aviso-texto');
+  t.textContent = `[${aviso.prioridade.toUpperCase()}] ${aviso.mensagem}`;
+  b.className = 'aviso-banner ativo' + (aviso.prioridade === 'urgente' ? ' urgente' : '');
+  if (aviso.prioridade !== 'urgente') setTimeout(() => b.classList.remove('ativo'), 12000);
+}
+
+conectarWS();
+</script>
+</body>
+</html>
 const TOKENS = new Set(); // tokens válidos em memória
 
 let ubsMap = {};
