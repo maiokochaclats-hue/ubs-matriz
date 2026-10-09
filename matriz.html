@@ -119,7 +119,6 @@ function toggleSom() {
 }
 
 function sair() {
-  // limpa cookie e storage
   document.cookie = 'token=; path=/; max-age=0';
   localStorage.removeItem('token_ubs');
   location.href = '/';
@@ -228,6 +227,14 @@ function atualizaStats() {
 function abrirModal(ubsId) {
   const ubs = ubsMap[ubsId];
   if (!ubs) return;
+
+  // avisa o servidor que os novos dados foram lidos (não volta ao recarregar)
+  fetch('/api/marcar-lido', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ubs_id: ubsId })
+  }).catch(() => {});
+
   ubsSelecionada = ubsId;
   ubs.novosDados = 0;
   ubs.piscando = false;
