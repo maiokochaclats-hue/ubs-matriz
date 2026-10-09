@@ -10,7 +10,7 @@ const MAX_HISTORICO = 50;
 const TOKENS = new Set();
 const TIMEOUT_HEARTBEAT = 15 * 1000;
 
-// ============ CREDENCIAIS INICIAIS (podem ser editadas via admin) ============
+// ============ CREDENCIAIS INICIAIS (editáveis via admin) ============
 const DADOS_INICIAIS = {
   presidencia: {
     usuario: 'presidente',
@@ -132,8 +132,8 @@ const DADOS_INICIAIS = {
 };
 
 // ============ ESTADO ============
-let estado = JSON.parse(JSON.stringify(DADOS_INICIAIS)); // cópia profunda
-let ubsMap = {}; // estado das unidades ativas (setores, documentos, etc.)
+let estado = JSON.parse(JSON.stringify(DADOS_INICIAIS));
+let ubsMap = {};
 const clientesWS = new Set();
 
 // ============ TIMEOUT HEARTBEAT ============
@@ -154,7 +154,6 @@ function carregarDados() {
     if (fs.existsSync(ARQUIVO_DADOS)) {
       const raw = fs.readFileSync(ARQUIVO_DADOS, 'utf8');
       const dados = JSON.parse(raw);
-      // Compatibilidade: dados antigos só tinham ubsMap
       if (dados.ubsMap && !dados.estado) {
         ubsMap = dados.ubsMap || {};
         estado = JSON.parse(JSON.stringify(DADOS_INICIAIS));
@@ -165,7 +164,6 @@ function carregarDados() {
       Object.values(ubsMap).forEach(u => { u.online = false; });
       console.log(`💾 Dados carregados: ${Object.keys(ubsMap).length} unidades ativas`);
     } else {
-      // Primeira execução: cria dados iniciais
       estado = JSON.parse(JSON.stringify(DADOS_INICIAIS));
       ubsMap = {};
       console.log('🆕 Primeira execução: usando dados iniciais');
@@ -189,7 +187,7 @@ function salvarDados() {
   }, 500);
 }
 
-// ============ WEBSOCKET (mesmo esquema de antes) ============
+// ============ WEBSOCKET ============
 function aceitarWS(req, socket) {
   const key = req.headers['sec-websocket-key'];
   const accept = crypto.createHash('sha1')
@@ -242,39 +240,21 @@ function enviarWS(cliente, obj) {
   try { cliente.socket.write(Buffer.concat([header, data])); } catch(e) {}
 }
 function broadcast(obj) { clientesWS.forEach(c => enviarWS(c, obj)); }
-function broadcastFiltrado(obj, filtro) {
-  clientesWS.forEach(c => { if (filtro(c)) enviarWS(c, obj); });
-}
 
-// ============ HELPERS DE PERMISSÃO ============
-// Encontra a qual diretoria uma unidade pertence
+// ============ HELPERS ============
 function encontrarDiretoriaDaUnidade(ubsId) {
   return estado.diretorias.find(d => d.unidades.some(u => u.id === ubsId));
 }
 
-// Verifica se o usuário logado pode receber/enviar mensagem para um destino
 function podeInteragir(origem, destino) {
-  // origem e destino: { tipo: 'presidencia'|'diretoria'|'apoio'|'unidade', id }
   if (!origem || !destino) return false;
-
-  // Presidência interage com todos
   if (origem.tipo === 'presidencia') return true;
   if (destino.tipo === 'presidencia') return true;
-
-  // Diretoria <-> Apoio: podem se comunicar
   if (origem.tipo === 'diretoria' && destino.tipo === 'apoio') return true;
   if (origem.tipo === 'apoio' && destino.tipo === 'diretoria') return true;
-
-  // Diretoria <-> Diretoria: NÃO podem
   if (origem.tipo === 'diretoria' && destino.tipo === 'diretoria') return false;
-
-  // Apoio <-> Apoio: podem
   if (origem.tipo === 'apoio' && destino.tipo === 'apoio') return true;
-
-  // Unidade <-> Unidade: NÃO
   if (origem.tipo === 'unidade' && destino.tipo === 'unidade') return false;
-
-  // Unidade <-> Diretoria: só se for a mesma diretoria
   if (origem.tipo === 'unidade' && destino.tipo === 'diretoria') {
     const dir = encontrarDiretoriaDaUnidade(origem.id);
     return dir && dir.id === destino.id;
@@ -283,11 +263,6 @@ function podeInteragir(origem, destino) {
     const dir = encontrarDiretoriaDaUnidade(destino.id);
     return dir && dir.id === origem.id;
   }
-
-  // Unidade <-> Apoio: NÃO (só via Presidência)
-  if (origem.tipo === 'unidade' && destino.tipo === 'apoio') return false;
-  if (origem.tipo === 'apoio' && destino.tipo === 'unidade') return false;
-
   return false;
 }
 
@@ -307,7 +282,6 @@ function tratarMensagem(cliente, msg) {
     return;
   }
 
-  // ===== Fluxo antigo (compatibilidade com filial.html) =====
   if (msg.type === 'dados_setor' && msg.ubs_id) {
     const ubs = ubsMap[msg.ubs_id];
     if (!ubs) return;
@@ -416,7 +390,7 @@ function tratarMensagem(cliente, msg) {
   }
 }
 
-// ============ HTTP ============
+// ============ HTTP HELPERS ============
 function lerCorpo(req) {
   return new Promise((res) => {
     let b = ''; req.on('data', c => b += c); req.on('end', () => { try { res(JSON.parse(b || '{}')); } catch(e){ res({}); } });
@@ -433,18 +407,14 @@ function htmlFile(res, nome) {
   });
 }
 
-// ============ AUTENTICAÇÃO ============
 function autenticar(usuario, senha) {
-  // Presidência
   if (estado.presidencia && estado.presidencia.usuario === usuario && estado.presidencia.senha === senha) {
     return { ok: true, papel: 'presidencia', dados: { nome: estado.presidencia.nome, cargo: estado.presidencia.cargo } };
   }
-  // Diretorias
   const dir = estado.diretorias.find(d => d.usuario === usuario && d.senha === senha);
   if (dir) {
     return { ok: true, papel: 'diretoria', dados: { id: dir.id, nome: dir.nome, diretor: dir.diretor } };
   }
-  // Órgãos de apoio
   const apoio = estado.orgaos_apoio.find(o => o.usuario === usuario && o.senha === senha);
   if (apoio) {
     return { ok: true, papel: 'apoio', dados: { id: apoio.id, nome: apoio.nome, responsavel: apoio.responsavel } };
@@ -452,6 +422,19 @@ function autenticar(usuario, senha) {
   return { ok: false };
 }
 
+function getToken(req) {
+  const cookie = req.headers.cookie || '';
+  const t = cookie.match(/token=([a-f0-9]+)/)?.[1];
+  if (!t) return null;
+  return [...TOKENS].find(x => x.token === t) || null;
+}
+
+function requirePresidencia(req) {
+  const t = getToken(req);
+  return t && t.papel === 'presidencia';
+}
+
+// ============ SERVIDOR HTTP ============
 const server = http.createServer(async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -482,22 +465,33 @@ const server = http.createServer(async (req, res) => {
     return json(res, 200, { ok: true });
   }
 
-  // ===== VERIFICAR TOKEN =====
   if (url === '/api/verificar' && req.method === 'POST') {
     const body = await lerCorpo(req);
     const t = [...TOKENS].find(x => x.token === body.token);
     return json(res, 200, { ok: !!t, papel: t?.papel, dados: t?.dados });
   }
 
-  // ===== LISTA DE UNIDADES (por diretoria) =====
+  // ===== LISTA PÚBLICA DE UNIDADES (para o dropdown da filial) =====
+  if (url === '/api/usfs') {
+    const todas = [];
+    estado.diretorias.forEach(d => {
+      d.unidades.forEach(u => {
+        todas.push({
+          id: u.id,
+          nome: u.nome,
+          regiao: u.regiao || d.nome
+        });
+      });
+    });
+    return json(res, 200, { usfs: todas });
+  }
+
+  // ===== LISTA DE UNIDADES (por diretoria, requer login) =====
   if (url === '/api/unidades') {
-    const cookie = req.headers.cookie || '';
-    const token = cookie.match(/token=([a-f0-9]+)/)?.[1];
-    const t = [...TOKENS].find(x => x.token === token);
+    const t = getToken(req);
     if (!t) return json(res, 401, { ok: false });
 
-    if (t.papel === 'presidencia') {
-      // Presidência vê todas
+    if (t.papel === 'presidencia' || t.papel === 'apoio') {
       const todas = [];
       estado.diretorias.forEach(d => {
         d.unidades.forEach(u => todas.push({ ...u, diretoria: d.nome, diretoria_id: d.id }));
@@ -506,27 +500,13 @@ const server = http.createServer(async (req, res) => {
     }
     if (t.papel === 'diretoria') {
       const d = estado.diretorias.find(x => x.id === t.dados.id);
+      if (!d) return json(res, 404, { ok: false });
       return json(res, 200, { ok: true, unidades: d.unidades });
-    }
-    if (t.papel === 'apoio') {
-      // Apoio vê todas (mas só para consulta)
-      const todas = [];
-      estado.diretorias.forEach(d => {
-        d.unidades.forEach(u => todas.push({ ...u, diretoria: d.nome, diretoria_id: d.id }));
-      });
-      return json(res, 200, { ok: true, unidades: todas });
     }
     return json(res, 403, { ok: false });
   }
 
-  // ===== ADMIN — SÓ PRESIDÊNCIA =====
-  function requirePresidencia(req) {
-    const cookie = req.headers.cookie || '';
-    const token = cookie.match(/token=([a-f0-9]+)/)?.[1];
-    const t = [...TOKENS].find(x => x.token === token);
-    return t && t.papel === 'presidencia';
-  }
-
+  // ===== ADMIN =====
   if (url === '/api/admin/estado' && req.method === 'GET') {
     if (!requirePresidencia(req)) return json(res, 403, { ok: false });
     return json(res, 200, { ok: true, estado });
@@ -550,6 +530,9 @@ const server = http.createServer(async (req, res) => {
     const body = await lerCorpo(req);
     const d = estado.diretorias.find(x => x.id === body.diretoria_id);
     if (!d) return json(res, 404, { ok: false, erro: 'Diretoria não encontrada' });
+    if (d.unidades.some(u => u.id === body.id)) {
+      return json(res, 400, { ok: false, erro: 'ID já existe' });
+    }
     d.unidades.push({
       id: body.id,
       nome: body.nome,
@@ -598,7 +581,6 @@ const server = http.createServer(async (req, res) => {
     const id = body.ubs_id;
     const existente = ubsMap[id];
 
-    // Encontra a qual diretoria essa unidade pertence
     const dir = encontrarDiretoriaDaUnidade(id);
     if (!dir) {
       return json(res, 404, { ok: false, erro: 'Unidade não cadastrada em nenhuma diretoria' });
@@ -634,7 +616,13 @@ const server = http.createServer(async (req, res) => {
     return json(res, 200, { ok: true, ubs: ubsMap[id] });
   }
 
-  // ===== BACKUP =====
+  if (url === '/api/aviso' && req.method === 'POST') {
+    const body = await lerCorpo(req);
+    const aviso = { titulo: body.titulo, mensagem: body.mensagem, prioridade: body.prioridade || 'info', ts: Date.now() };
+    broadcast({ type: 'aviso', aviso });
+    return json(res, 200, { ok: true });
+  }
+
   if (url === '/api/backup') {
     res.writeHead(200, {
       'Content-Type': 'application/json',
@@ -644,13 +632,10 @@ const server = http.createServer(async (req, res) => {
   }
 
   // ===== PÁGINAS =====
-  if (url === '/matriz' || url === '/diretoria' || url === '/presidencia' || url === '/apoio' || url === '/admin') {
-    const cookie = req.headers.cookie || '';
-    const token = cookie.match(/token=([a-f0-9]+)/)?.[1];
-    const t = [...TOKENS].find(x => x.token === token);
+  if (url === '/presidencia' || url === '/diretoria' || url === '/apoio' || url === '/admin' || url === '/matriz') {
+    const t = getToken(req);
     if (!t) return htmlFile(res, 'login.html');
 
-    // Redireciona para o painel correto do papel
     if (url === '/matriz') {
       if (t.papel === 'presidencia') return htmlFile(res, 'presidencia.html');
       if (t.papel === 'diretoria') return htmlFile(res, 'diretoria.html');
