@@ -2,6 +2,8 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#0f172a">
 <title>Matriz USF</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -557,6 +559,10 @@ function mostrarAviso(aviso) {
 }
 
 conectarWS();
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js').catch(() => {});
+}
 </script>
 </body>
 </html>
