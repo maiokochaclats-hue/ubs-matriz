@@ -668,4 +668,53 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (url === '/') return htmlFile(res, 'login.html');
-  if (url === '/filial') return htmlFile(res,
+  if (url === '/filial') return htmlFile(res, 'filial.html');
+
+  // ===== PWA =====
+  if (url === '/manifest.json') {
+    return fs.readFile(path.join(__dirname, 'manifest.json'), (e, d) => {
+      if (e) { res.writeHead(404); return res.end('não encontrado'); }
+      res.writeHead(200, { 'Content-Type': 'application/manifest+json; charset=utf-8' });
+      res.end(d);
+    });
+  }
+  if (url === '/sw.js') {
+    return fs.readFile(path.join(__dirname, 'sw.js'), (e, d) => {
+      if (e) { res.writeHead(404); return res.end('não encontrado'); }
+      res.writeHead(200, { 'Content-Type': 'application/javascript; charset=utf-8' });
+      res.end(d);
+    });
+  }
+  if (url === '/favicon.ico') { res.writeHead(204); return res.end(); }
+
+  res.writeHead(404); res.end('Rota não encontrada');
+});
+
+carregarDados();
+
+server.listen(PORTA, '0.0.0.0', () => {
+  const os = require('os');
+  const ips = Object.values(os.networkInterfaces()).flat()
+    .filter(i => i.family === 'IPv4' && !i.internal).map(i => i.address);
+  console.log('\n🏛️ Servidor Fundação São Sebastião rodando!\n');
+  console.log(`   Login:        http://localhost:${PORTA}/`);
+  console.log(`   Presidência:  http://localhost:${PORTA}/presidencia`);
+  console.log(`   Diretoria:    http://localhost:${PORTA}/diretoria`);
+  console.log(`   Apoio:        http://localhost:${PORTA}/apoio`);
+  console.log(`   Admin:        http://localhost:${PORTA}/admin`);
+  ips.forEach(ip => {
+    console.log(`   LAN:          http://${ip}:${PORTA}/`);
+  });
+  console.log(`\n📋 ${estado.diretorias.length} diretorias | ${estado.orgaos_apoio.length} órgãos de apoio`);
+  console.log('   (deixe esta janela aberta)\n');
+});
+
+const URL_EXTERNA = process.env.RENDER_EXTERNAL_URL;
+if (URL_EXTERNA) {
+  setInterval(() => {
+    https.get(URL_EXTERNA, (res) => {
+      console.log(`[keep-alive] Ping: ${res.statusCode}`);
+    }).on('error', () => {});
+  }, 10 * 60 * 1000);
+  console.log(`🔁 Keep-alive ativo`);
+}
