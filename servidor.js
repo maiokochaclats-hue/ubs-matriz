@@ -4,7 +4,6 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
-// Porta dinâmica (Render fornece PORT). Local usa 3000.
 const PORTA = process.env.PORT || 3000;
 const ARQUIVO_DADOS = path.join(__dirname, 'dados.json');
 const MAX_HISTORICO = 50;
@@ -12,7 +11,6 @@ const SENHA_MATRIZ = 'ubs2026';
 const TOKENS = new Set();
 const TIMEOUT_HEARTBEAT = 15 * 1000;
 
-// Lista fixa das 24 USFs (agrupadas por região)
 const USFS = [
   { id: 'usf-01', nome: 'USF Canto do Mar',       regiao: 'Costa Norte' },
   { id: 'usf-02', nome: 'USF Enseada I',          regiao: 'Costa Norte' },
@@ -43,7 +41,6 @@ const USFS = [
 let ubsMap = {};
 const clientesWS = new Set();
 
-// ---------- Timeout de heartbeat ----------
 setInterval(() => {
   const agora = Date.now();
   Object.values(ubsMap).forEach(ubs => {
@@ -56,7 +53,6 @@ setInterval(() => {
   });
 }, 5000);
 
-// ---------- Persistência ----------
 function carregarDados() {
   try {
     if (fs.existsSync(ARQUIVO_DADOS)) {
@@ -83,7 +79,6 @@ function salvarDados() {
   }, 500);
 }
 
-// ---------- WebSocket manual ----------
 function aceitarWS(req, socket) {
   const key = req.headers['sec-websocket-key'];
   const accept = crypto.createHash('sha1')
@@ -137,7 +132,6 @@ function enviarWS(cliente, obj) {
 }
 function broadcast(obj) { clientesWS.forEach(c => enviarWS(c, obj)); }
 
-// ---------- Lógica ----------
 function tratarMensagem(cliente, msg) {
   if (!msg || !msg.type) return;
 
@@ -197,8 +191,6 @@ function tratarMensagem(cliente, msg) {
     return;
   }
 
-  // ---------- Documentos ----------
-  // Filial envia documento vinculado a um setor
   if (msg.type === 'documento_setor' && msg.ubs_id) {
     const ubs = ubsMap[msg.ubs_id];
     if (!ubs) return;
@@ -229,7 +221,6 @@ function tratarMensagem(cliente, msg) {
     return;
   }
 
-  // Matriz envia documento para uma USF específica
   if (msg.type === 'documento_matriz' && msg.ubs_id) {
     const ubs = ubsMap[msg.ubs_id];
     if (!ubs) return;
@@ -258,7 +249,6 @@ function tratarMensagem(cliente, msg) {
     return;
   }
 
-  // Marca documentos como lidos
   if (msg.type === 'marcar_docs_lidos' && msg.ubs_id) {
     const ubs = ubsMap[msg.ubs_id];
     if (ubs && ubs.documentos) {
@@ -271,7 +261,6 @@ function tratarMensagem(cliente, msg) {
   }
 }
 
-// ---------- HTTP ----------
 function lerCorpo(req) {
   return new Promise((res) => {
     let b = ''; req.on('data', c => b += c); req.on('end', () => { try { res(JSON.parse(b || '{}')); } catch(e){ res({}); } });
@@ -320,12 +309,10 @@ const server = http.createServer(async (req, res) => {
     return json(res, 200, { ok: true });
   }
 
-  // ---------- Lista de USFs (pública) ----------
   if (url === '/api/usfs') {
     return json(res, 200, { usfs: USFS });
   }
 
-  // ---------- Marcar lido ----------
   if (url === '/api/marcar-lido' && req.method === 'POST') {
     const body = await lerCorpo(req);
     const ubs = ubsMap[body.ubs_id];
@@ -396,6 +383,27 @@ const server = http.createServer(async (req, res) => {
   if (url === '/') return htmlFile(res, 'login.html');
   if (url === '/filial') return htmlFile(res, 'filial.html');
 
+  // ---------- PWA ----------
+  if (url === '/manifest.json') {
+    return fs.readFile(path.join(__dirname, 'manifest.json'), (e, d) => {
+      if (e) { res.writeHead(404); return res.end('manifest.json não encontrado'); }
+      res.writeHead(200, { 'Content-Type': 'application/manifest+json; charset=utf-8' });
+      res.end(d);
+    });
+  }
+
+  if (url === '/sw.js') {
+    return fs.readFile(path.join(__dirname, 'sw.js'), (e, d) => {
+      if (e) { res.writeHead(404); return res.end('sw.js não encontrado'); }
+      res.writeHead(200, { 'Content-Type': 'application/javascript; charset=utf-8' });
+      res.end(d);
+    });
+  }
+
+  if (url === '/favicon.ico') {
+    res.writeHead(204); return res.end();
+  }
+
   res.writeHead(404); res.end('Rota não encontrada');
 });
 
@@ -418,7 +426,6 @@ server.listen(PORTA, '0.0.0.0', () => {
   console.log('   (deixe esta janela aberta)\n');
 });
 
-// ---------- Keep-alive para o Render ----------
 const URL_EXTERNA = process.env.RENDER_EXTERNAL_URL;
 if (URL_EXTERNA) {
   setInterval(() => {
