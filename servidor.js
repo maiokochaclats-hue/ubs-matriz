@@ -7,6 +7,7 @@ const crypto = require('crypto');
 const PORTA = process.env.PORT || 3000;
 const ARQUIVO_DADOS = path.join(__dirname, 'dados.json');
 const MAX_HISTORICO = 50;
+const MAX_MENSAGENS = 500;
 const TOKENS = new Set();
 const TIMEOUT_HEARTBEAT = 15 * 1000;
 
@@ -104,7 +105,8 @@ const DADOS_INICIAIS = {
     { id: 'apoio-juridico', nome: 'Jurídico', usuario: 'juridico', senha: 'juridico2026', responsavel: null },
     { id: 'apoio-nep', nome: 'NEP - Núcleo de Ensino e Pesquisa', usuario: 'nep', senha: 'nep2026', responsavel: null },
     { id: 'apoio-seguranca', nome: 'Segurança do Trabalho', usuario: 'seguranca', senha: 'seguranca2026', responsavel: null }
-  ]
+  ],
+  mensagens: []
 };
 
 // ============ ESTADO ============
@@ -130,15 +132,11 @@ function carregarDados() {
     if (fs.existsSync(ARQUIVO_DADOS)) {
       const raw = fs.readFileSync(ARQUIVO_DADOS, 'utf8');
       const dados = JSON.parse(raw);
-      if (dados.ubsMap && !dados.estado) {
-        ubsMap = dados.ubsMap || {};
-        estado = JSON.parse(JSON.stringify(DADOS_INICIAIS));
-      } else {
-        ubsMap = dados.ubsMap || {};
-        estado = dados.estado || JSON.parse(JSON.stringify(DADOS_INICIAIS));
-      }
+      ubsMap = dados.ubsMap || {};
+      estado = dados.estado || JSON.parse(JSON.stringify(DADOS_INICIAIS));
+      if (!estado.mensagens) estado.mensagens = [];
       Object.values(ubsMap).forEach(u => { u.online = false; });
-      console.log(`💾 Dados carregados: ${Object.keys(ubsMap).length} unidades ativas`);
+      console.log(`💾 Dados carregados: ${Object.keys(ubsMap).length} unidades ativas, ${estado.mensagens.length} mensagens`);
     } else {
       estado = JSON.parse(JSON.stringify(DADOS_INICIAIS));
       ubsMap = {};
@@ -175,7 +173,7 @@ function aceitarWS(req, socket) {
     'Connection: Upgrade\r\n' +
     `Sec-WebSocket-Accept: ${accept}\r\n\r\n`
   );
-  const cliente = { socket, buffer: Buffer.alloc(0), papel: null, usuario: null };
+  const cliente = { socket, buffer: Buffer.alloc(0), papel: null, usuario: null, usuarioId: null };
   clientesWS.add(cliente);
   socket.on('data', (chunk) => processarFrames(cliente, chunk));
   socket.on('close', () => clientesWS.delete(cliente));
@@ -222,27 +220,61 @@ function encontrarDiretoriaDaUnidade(ubsId) {
   return estado.diretorias.find(d => d.unidades.some(u => u.id === ubsId));
 }
 
-function podeInteragir(origem, destino) {
+function getNomePorUsuario(tipo, id) {
+  if (tipo === 'presidencia') return estado.presidencia.nome;
+  if (tipo === 'diretoria') {
+    const d = estado.diretorias.find(x => x.id === id);
+    return d ? d.nome : id;
+  }
+  if (tipo === 'apoio') {
+    const o = estado.orgaos_apoio.find(x => x.id === id);
+    return o ? o.nome : id;
+  }
+  if (tipo === 'unidade') {
+    const dir = encontrarDiretoriaDaUnidade(id);
+    const u = dir?.unidades.find(x => x.id === id);
+    return u ? u.nome : id;
+  }
+  return id;
+}
+
+// Verifica se origem pode enviar mensagem para destino
+function podeMensagem(origem, destino) {
   if (!origem || !destino) return false;
-  if (origem.tipo === 'presidencia') return true;
-  if (destino.tipo === 'presidencia') return true;
+  if (origem.tipo === 'presidencia') {
+    return ['presidencia', 'diretoria', 'apoio'].includes(destino.tipo);
+  }
+  if (destino.tipo === 'presidencia') {
+    return ['diretoria', 'apoio'].includes(origem.tipo);
+  }
   if (origem.tipo === 'diretoria' && destino.tipo === 'apoio') return true;
   if (origem.tipo === 'apoio' && destino.tipo === 'diretoria') return true;
   if (origem.tipo === 'diretoria' && destino.tipo === 'diretoria') return false;
-  if (origem.tipo === 'apoio' && destino.tipo === 'apoio') return true;
-  if (origem.tipo === 'unidade' && destino.tipo === 'unidade') return false;
-  if (origem.tipo === 'unidade' && destino.tipo === 'diretoria') {
-    const dir = encontrarDiretoriaDaUnidade(origem.id);
-    return dir && dir.id === destino.id;
-  }
-  if (origem.tipo === 'diretoria' && destino.tipo === 'unidade') {
-    const dir = encontrarDiretoriaDaUnidade(destino.id);
-    return dir && dir.id === origem.id;
-  }
+  if (origem.tipo === 'apoio' && destino.tipo === 'apoio') return false;
   return false;
 }
 
-// ============ TRATAR MENSAGENS WS ============
+// ============ MENSAGENS ============
+function salvarMensagem(msg) {
+  if (!estado.mensagens) estado.mensagens = [];
+  estado.mensagens.unshift(msg);
+  if (estado.mensagens.length > MAX_MENSAGENS) estado.mensagens.length = MAX_MENSAGENS;
+  salvarDados();
+}
+
+function enviarMensagemPara(destino, mensagem, remetenteCli) {
+  // Encontra clientes WS cujo papel e id batem com o destino
+  clientesWS.forEach(c => {
+    if (c.papel !== destino.tipo) return;
+    if (destino.tipo === 'presidencia') {
+      // Presidência: só um usuário
+      enviarWS(c, { type: 'mensagem_recebida', mensagem });
+    } else if (c.usuario === destino.id) {
+      enviarWS(c, { type: 'mensagem_recebida', mensagem });
+    }
+  });
+}
+
 function tratarMensagem(cliente, msg) {
   if (!msg || !msg.type) return;
 
@@ -250,8 +282,8 @@ function tratarMensagem(cliente, msg) {
   if (msg.type === 'ola_matriz' || msg.type === 'ola_diretoria' || msg.type === 'ola_presidencia' || msg.type === 'ola_apoio') {
     cliente.papel = msg.type.replace('ola_', '');
     cliente.usuario = msg.usuario || null;
+    cliente.usuarioId = msg.usuario || null;
 
-    // Lista completa de unidades (usada por matriz, presidência e apoio)
     const listaTodas = (() => {
       const todas = [];
       estado.diretorias.forEach(d => {
@@ -260,25 +292,17 @@ function tratarMensagem(cliente, msg) {
       return todas;
     })();
 
-    // Matriz antiga: recebe TUDO
     if (msg.type === 'ola_matriz') {
-      enviarWS(cliente, {
-        type: 'estado_inicial',
-        ubs: Object.values(ubsMap),
-        listaUSF: listaTodas
-      });
+      enviarWS(cliente, { type: 'estado_inicial', ubs: Object.values(ubsMap), listaUSF: listaTodas });
       return;
     }
 
-    // Diretoria: recebe só as unidades da sua diretoria
     if (msg.type === 'ola_diretoria') {
       const dirId = msg.usuario;
       const dir = estado.diretorias.find(d => d.id === dirId);
       if (!dir) return;
-
       const idsDaDiretoria = dir.unidades.map(u => u.id);
       const ubsFiltradas = Object.values(ubsMap).filter(u => idsDaDiretoria.includes(u.id));
-
       enviarWS(cliente, {
         type: 'estado_inicial',
         ubs: ubsFiltradas,
@@ -287,23 +311,8 @@ function tratarMensagem(cliente, msg) {
       return;
     }
 
-    // Presidência: recebe TUDO
-    if (msg.type === 'ola_presidencia') {
-      enviarWS(cliente, {
-        type: 'estado_inicial',
-        ubs: Object.values(ubsMap),
-        listaUSF: listaTodas
-      });
-      return;
-    }
-
-    // Apoio: recebe TUDO (só consulta)
-    if (msg.type === 'ola_apoio') {
-      enviarWS(cliente, {
-        type: 'estado_inicial',
-        ubs: Object.values(ubsMap),
-        listaUSF: listaTodas
-      });
+    if (msg.type === 'ola_presidencia' || msg.type === 'ola_apoio') {
+      enviarWS(cliente, { type: 'estado_inicial', ubs: Object.values(ubsMap), listaUSF: listaTodas });
       return;
     }
 
@@ -316,7 +325,58 @@ function tratarMensagem(cliente, msg) {
     return;
   }
 
-  // ===== DADOS =====
+  // ===== ENVIO DE MENSAGEM =====
+  if (msg.type === 'enviar_mensagem') {
+    const { destino_tipo, destino_id, assunto, prioridade, corpo, anexos } = msg;
+
+    // Permissão
+    const origem = { tipo: cliente.papel === 'matriz' ? 'presidencia' : cliente.papel, id: cliente.usuario };
+    const destino = { tipo: destino_tipo, id: destino_id };
+    if (!podeMensagem(origem, destino)) {
+      enviarWS(cliente, { type: 'erro_mensagem', texto: 'Você não tem permissão para enviar a este destinatário' });
+      return;
+    }
+
+    // Monta mensagem
+    const mensagem = {
+      id: crypto.randomBytes(8).toString('hex'),
+      de_tipo: origem.tipo,
+      de_id: origem.id,
+      de_nome: getNomePorUsuario(origem.tipo, origem.id),
+      para_tipo: destino.tipo,
+      para_id: destino.id,
+      para_nome: getNomePorUsuario(destino.tipo, destino.id),
+      assunto: assunto || '(sem assunto)',
+      prioridade: prioridade || 'info',
+      corpo: corpo || '',
+      anexos: anexos || [],
+      ts: new Date().toISOString(),
+      lida: false
+    };
+
+    salvarMensagem(mensagem);
+
+    // Envia para o destinatário em tempo real
+    enviarMensagemPara(destino, mensagem, cliente);
+
+    // Confirma para o remetente
+    enviarWS(cliente, { type: 'mensagem_enviada', mensagem });
+
+    console.log(`📨 Mensagem: ${mensagem.de_nome} → ${mensagem.para_nome}`);
+    return;
+  }
+
+  // ===== MARCAR COMO LIDA =====
+  if (msg.type === 'marcar_mensagem_lida' && msg.mensagem_id) {
+    const m = estado.mensagens.find(x => x.id === msg.mensagem_id);
+    if (m) {
+      m.lida = true;
+      salvarDados();
+    }
+    return;
+  }
+
+  // ===== DADOS / HEARTBEAT / DOCS (mantidos) =====
   if (msg.type === 'dados_setor' && msg.ubs_id) {
     const ubs = ubsMap[msg.ubs_id];
     if (!ubs) return;
@@ -444,7 +504,7 @@ function htmlFile(res, nome) {
 
 function autenticar(usuario, senha) {
   if (estado.presidencia && estado.presidencia.usuario === usuario && estado.presidencia.senha === senha) {
-    return { ok: true, papel: 'presidencia', dados: { nome: estado.presidencia.nome, cargo: estado.presidencia.cargo } };
+    return { ok: true, papel: 'presidencia', dados: { id: 'presidencia', nome: estado.presidencia.nome, cargo: estado.presidencia.cargo } };
   }
   const dir = estado.diretorias.find(d => d.usuario === usuario && d.senha === senha);
   if (dir) {
@@ -511,17 +571,13 @@ const server = http.createServer(async (req, res) => {
     const todas = [];
     estado.diretorias.forEach(d => {
       d.unidades.forEach(u => {
-        todas.push({
-          id: u.id,
-          nome: u.nome,
-          regiao: u.regiao || d.nome
-        });
+        todas.push({ id: u.id, nome: u.nome, regiao: u.regiao || d.nome });
       });
     });
     return json(res, 200, { usfs: todas });
   }
 
-  // ===== LISTA DE UNIDADES (por diretoria) =====
+  // ===== LISTA DE UNIDADES =====
   if (url === '/api/unidades') {
     const t = getToken(req);
     if (!t) return json(res, 401, { ok: false });
@@ -539,6 +595,53 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, { ok: true, unidades: d.unidades });
     }
     return json(res, 403, { ok: false });
+  }
+
+  // ===== MENSAGENS =====
+  if (url === '/api/mensagens' && req.method === 'GET') {
+    const t = getToken(req);
+    if (!t) return json(res, 401, { ok: false });
+
+    const meuTipo = t.papel;
+    const meuId = t.dados?.id || null;
+
+    const recebidas = estado.mensagens.filter(m =>
+      m.para_tipo === meuTipo && (meuTipo === 'presidencia' || m.para_id === meuId)
+    );
+    const enviadas = estado.mensagens.filter(m =>
+      m.de_tipo === meuTipo && (meuTipo === 'presidencia' || m.de_id === meuId)
+    );
+
+    return json(res, 200, { ok: true, recebidas, enviadas });
+  }
+
+  if (url === '/api/mensagens/destinatarios' && req.method === 'GET') {
+    const t = getToken(req);
+    if (!t) return json(res, 401, { ok: false });
+
+    const destinos = [];
+    if (t.papel === 'diretoria' || t.papel === 'apoio') {
+      destinos.push({ tipo: 'presidencia', id: 'presidencia', nome: 'Presidência' });
+    }
+    if (t.papel === 'presidencia') {
+      estado.diretorias.forEach(d => {
+        destinos.push({ tipo: 'diretoria', id: d.id, nome: d.nome });
+      });
+      estado.orgaos_apoio.forEach(o => {
+        destinos.push({ tipo: 'apoio', id: o.id, nome: o.nome });
+      });
+    }
+    if (t.papel === 'diretoria') {
+      estado.orgaos_apoio.forEach(o => {
+        destinos.push({ tipo: 'apoio', id: o.id, nome: o.nome });
+      });
+    }
+    if (t.papel === 'apoio') {
+      estado.diretorias.forEach(d => {
+        destinos.push({ tipo: 'diretoria', id: d.id, nome: d.nome });
+      });
+    }
+    return json(res, 200, { ok: true, destinos });
   }
 
   // ===== ADMIN =====
@@ -568,11 +671,7 @@ const server = http.createServer(async (req, res) => {
     if (d.unidades.some(u => u.id === body.id)) {
       return json(res, 400, { ok: false, erro: 'ID já existe' });
     }
-    d.unidades.push({
-      id: body.id,
-      nome: body.nome,
-      regiao: body.regiao || d.nome
-    });
+    d.unidades.push({ id: body.id, nome: body.nome, regiao: body.regiao || d.nome });
     salvarDados();
     return json(res, 200, { ok: true, diretoria: d });
   }
@@ -682,12 +781,7 @@ const server = http.createServer(async (req, res) => {
     if (url === '/admin') return htmlFile(res, 'admin.html');
   }
 
-  // ===== MATRIZ ANTIGA =====
-  if (url === '/matriz') {
-    return htmlFile(res, 'matriz.html');
-  }
-
-  // ===== PÁGINAS PÚBLICAS =====
+  if (url === '/matriz') return htmlFile(res, 'matriz.html');
   if (url === '/') return htmlFile(res, 'login.html');
   if (url === '/filial') return htmlFile(res, 'filial.html');
 
