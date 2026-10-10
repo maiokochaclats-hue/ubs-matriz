@@ -10,7 +10,7 @@ const MAX_HISTORICO = 50;
 const TOKENS = new Set();
 const TIMEOUT_HEARTBEAT = 15 * 1000;
 
-// ============ CREDENCIAIS INICIAIS (editáveis via admin) ============
+// ============ CREDENCIAIS INICIAIS ============
 const DADOS_INICIAIS = {
   presidencia: {
     usuario: 'presidente',
@@ -100,34 +100,10 @@ const DADOS_INICIAIS = {
     }
   ],
   orgaos_apoio: [
-    {
-      id: 'apoio-controladoria',
-      nome: 'Controladoria Interna',
-      usuario: 'fabiana',
-      senha: 'control2026',
-      responsavel: 'Fabiana Centurião'
-    },
-    {
-      id: 'apoio-juridico',
-      nome: 'Jurídico',
-      usuario: 'juridico',
-      senha: 'juridico2026',
-      responsavel: null
-    },
-    {
-      id: 'apoio-nep',
-      nome: 'NEP - Núcleo de Ensino e Pesquisa',
-      usuario: 'nep',
-      senha: 'nep2026',
-      responsavel: null
-    },
-    {
-      id: 'apoio-seguranca',
-      nome: 'Segurança do Trabalho',
-      usuario: 'seguranca',
-      senha: 'seguranca2026',
-      responsavel: null
-    }
+    { id: 'apoio-controladoria', nome: 'Controladoria Interna', usuario: 'fabiana', senha: 'control2026', responsavel: 'Fabiana Centurião' },
+    { id: 'apoio-juridico', nome: 'Jurídico', usuario: 'juridico', senha: 'juridico2026', responsavel: null },
+    { id: 'apoio-nep', nome: 'NEP - Núcleo de Ensino e Pesquisa', usuario: 'nep', senha: 'nep2026', responsavel: null },
+    { id: 'apoio-seguranca', nome: 'Segurança do Trabalho', usuario: 'seguranca', senha: 'seguranca2026', responsavel: null }
   ]
 };
 
@@ -273,6 +249,21 @@ function tratarMensagem(cliente, msg) {
   if (msg.type === 'ola_matriz' || msg.type === 'ola_diretoria' || msg.type === 'ola_presidencia' || msg.type === 'ola_apoio') {
     cliente.papel = msg.type.replace('ola_', '');
     cliente.usuario = msg.usuario || null;
+
+    // Se for matriz antiga, envia estado inicial das USFs ativas
+    if (msg.type === 'ola_matriz') {
+      enviarWS(cliente, {
+        type: 'estado_inicial',
+        ubs: Object.values(ubsMap),
+        listaUSF: (() => {
+          const todas = [];
+          estado.diretorias.forEach(d => {
+            d.unidades.forEach(u => todas.push({ id: u.id, nome: u.nome, regiao: u.regiao || d.nome }));
+          });
+          return todas;
+        })()
+      });
+    }
     return;
   }
 
@@ -471,7 +462,7 @@ const server = http.createServer(async (req, res) => {
     return json(res, 200, { ok: !!t, papel: t?.papel, dados: t?.dados });
   }
 
-  // ===== LISTA PÚBLICA DE UNIDADES (para o dropdown da filial) =====
+  // ===== LISTA PÚBLICA DE UNIDADES (dropdown da filial) =====
   if (url === '/api/usfs') {
     const todas = [];
     estado.diretorias.forEach(d => {
@@ -575,7 +566,7 @@ const server = http.createServer(async (req, res) => {
     return json(res, 200, { ok: true, presidencia: estado.presidencia });
   }
 
-  // ===== REGISTRO DE UNIDADE (compatível com filial.html) =====
+  // ===== REGISTRO DE UNIDADE =====
   if (url === '/api/registrar' && req.method === 'POST') {
     const body = await lerCorpo(req);
     const id = body.ubs_id;
@@ -631,16 +622,11 @@ const server = http.createServer(async (req, res) => {
     return res.end(JSON.stringify({ estado, ubsMap }, null, 2));
   }
 
-  // ===== PÁGINAS =====
-  if (url === '/presidencia' || url === '/diretoria' || url === '/apoio' || url === '/admin' || url === '/matriz') {
+  // ===== PÁGINAS PROTEGIDAS =====
+  if (url === '/presidencia' || url === '/diretoria' || url === '/apoio' || url === '/admin') {
     const t = getToken(req);
     if (!t) return htmlFile(res, 'login.html');
 
-    if (url === '/matriz') {
-      if (t.papel === 'presidencia') return htmlFile(res, 'presidencia.html');
-      if (t.papel === 'diretoria') return htmlFile(res, 'diretoria.html');
-      if (t.papel === 'apoio') return htmlFile(res, 'apoio.html');
-    }
     if (url === '/presidencia' && t.papel !== 'presidencia') return htmlFile(res, 'login.html');
     if (url === '/diretoria' && t.papel !== 'diretoria') return htmlFile(res, 'login.html');
     if (url === '/apoio' && t.papel !== 'apoio') return htmlFile(res, 'login.html');
@@ -652,6 +638,12 @@ const server = http.createServer(async (req, res) => {
     if (url === '/admin') return htmlFile(res, 'admin.html');
   }
 
+  // ===== MATRIZ ANTIGA (compatibilidade) =====
+  if (url === '/matriz') {
+    return htmlFile(res, 'matriz.html');
+  }
+
+  // ===== PÁGINAS PÚBLICAS =====
   if (url === '/') return htmlFile(res, 'login.html');
   if (url === '/filial') return htmlFile(res, 'filial.html');
 
@@ -683,10 +675,12 @@ server.listen(PORTA, '0.0.0.0', () => {
     .filter(i => i.family === 'IPv4' && !i.internal).map(i => i.address);
   console.log('\n🏛️ Servidor Fundação São Sebastião rodando!\n');
   console.log(`   Login:        http://localhost:${PORTA}/`);
+  console.log(`   Matriz (antiga): http://localhost:${PORTA}/matriz`);
   console.log(`   Presidência:  http://localhost:${PORTA}/presidencia`);
   console.log(`   Diretoria:    http://localhost:${PORTA}/diretoria`);
   console.log(`   Apoio:        http://localhost:${PORTA}/apoio`);
   console.log(`   Admin:        http://localhost:${PORTA}/admin`);
+  console.log(`   Filial:       http://localhost:${PORTA}/filial`);
   ips.forEach(ip => {
     console.log(`   LAN:          http://${ip}:${PORTA}/`);
   });
