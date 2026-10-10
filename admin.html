@@ -4,87 +4,364 @@
 <meta charset="UTF-8">
 <link rel="manifest" href="/manifest.json">
 <meta name="theme-color" content="#0f172a">
-<title>Login — Fundação São Sebastião</title>
+<title>Admin — Fundação São Sebastião</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: system-ui, sans-serif; background: #0f172a; color: #e2e8f0; display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; }
-  .box { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 32px; width: 380px; max-width: 100%; }
-  h1 { font-size: 22px; margin-bottom: 4px; text-align: center; color: #f1f5f9; }
-  h2 { font-size: 13px; color: #94a3b8; font-weight: normal; margin-bottom: 24px; text-align: center; }
-  label { font-size: 12px; color: #94a3b8; display: block; margin-bottom: 6px; margin-top: 12px; }
-  input { background: #0f172a; border: 1px solid #334155; color: #e2e8f0; padding: 10px 14px; border-radius: 8px; font-size: 14px; width: 100%; }
-  input:focus { outline: none; border-color: #3b82f6; }
-  button { background: #3b82f6; border: none; color: white; padding: 12px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600; width: 100%; margin-top: 20px; }
-  button:hover { background: #2563eb; }
-  button:disabled { background: #475569; cursor: not-allowed; }
-  .erro { background: #7f1d1d; border: 1px solid #dc2626; color: #fecaca; padding: 10px 14px; border-radius: 8px; margin-top: 16px; font-size: 13px; display: none; }
-  .erro.ativo { display: block; }
-  .rodape { font-size: 11px; color: #64748b; text-align: center; margin-top: 20px; }
+  body { font-family: system-ui, sans-serif; background: #0f172a; color: #e2e8f0; padding: 20px; }
+  .container { max-width: 1200px; margin: 0 auto; }
+  h1 { font-size: 22px; color: #f1f5f9; margin-bottom: 4px; }
+  h2 { font-size: 13px; color: #94a3b8; font-weight: normal; margin-bottom: 20px; }
+  .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding: 16px 20px; background: #1e293b; border-radius: 12px; border: 1px solid #334155; flex-wrap: wrap; gap: 12px; }
+  .topbar a { color: #3b82f6; text-decoration: none; font-size: 13px; margin-left: 16px; }
+  .topbar a:hover { text-decoration: underline; }
+
+  /* ===== CARD DE BACKUP ===== */
+  .backup-card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 18px 22px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px; }
+  .backup-card.ativo { border-color: #16a34a; background: linear-gradient(135deg, #1e293b 0%, #14532d 200%); }
+  .backup-card.inativo { border-color: #dc2626; background: linear-gradient(135deg, #1e293b 0%, #7f1d1d 200%); }
+  .backup-info { display: flex; flex-direction: column; gap: 4px; }
+  .backup-info .titulo { font-size: 15px; font-weight: 600; color: #f1f5f9; }
+  .backup-info .status { font-size: 12px; color: #94a3b8; }
+  .backup-info .status b { color: #cbd5e1; }
+  .backup-info .ultimo { font-size: 12px; color: #86efac; }
+  .backup-info .ultimo.alerta { color: #fbbf24; }
+  .backup-info .ultimo.erro { color: #fecaca; }
+  .backup-acoes { display: flex; gap: 8px; align-items: center; }
+  .btn-backup { background: #16a34a; border: none; color: white; padding: 10px 18px; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 600; transition: all 0.2s; }
+  .btn-backup:hover { background: #15803d; }
+  .btn-backup:disabled { background: #475569; cursor: not-allowed; }
+  .backup-msg { font-size: 12px; color: #86efac; margin-left: 8px; display: none; }
+  .backup-msg.ativo { display: inline-block; }
+  .backup-msg.erro { color: #fecaca; }
+
+  /* ===== ABAS ===== */
+  .tabs { display: flex; gap: 8px; margin-bottom: 20px; border-bottom: 1px solid #334155; }
+  .tab { background: transparent; border: none; color: #94a3b8; padding: 10px 16px; cursor: pointer; font-size: 13px; border-bottom: 2px solid transparent; }
+  .tab.ativo { color: #3b82f6; border-bottom-color: #3b82f6; font-weight: 600; }
+  .painel { display: none; }
+  .painel.ativo { display: block; }
+  .card { background: #1e293b; border: 1px solid #334155; border-radius: 10px; padding: 20px; margin-bottom: 16px; }
+  .card h3 { font-size: 15px; color: #f1f5f9; margin-bottom: 12px; }
+  label { font-size: 11px; color: #94a3b8; display: block; margin-bottom: 4px; margin-top: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
+  input, select { background: #0f172a; border: 1px solid #334155; color: #e2e8f0; padding: 8px 12px; border-radius: 6px; font-size: 13px; width: 100%; }
+  input:focus, select:focus { outline: none; border-color: #3b82f6; }
+  .btn { background: #3b82f6; border: none; color: white; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 600; margin-top: 12px; }
+  .btn.verde { background: #16a34a; }
+  .btn.vermelho { background: #7f1d1d; }
+  .btn:hover { opacity: 0.9; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .unidade-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; background: #0f172a; border-radius: 6px; margin-bottom: 6px; font-size: 13px; }
+  .unidade-item .nome { color: #e2e8f0; font-weight: 500; }
+  .unidade-item .meta { color: #64748b; font-size: 11px; }
+  .unidade-item button { background: #7f1d1d; border: none; color: white; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 11px; }
+  .aviso { background: #14532d; border: 1px solid #16a34a; color: #bbf7d0; padding: 10px 14px; border-radius: 8px; margin-top: 12px; font-size: 12px; display: none; }
+  .aviso.ativo { display: block; }
+  .aviso.erro { background: #7f1d1d; border-color: #dc2626; color: #fecaca; }
 </style>
 </head>
 <body>
-<div class="box">
-  <h1>🏛️ Fundação São Sebastião</h1>
-  <h2>Sistema de Gestão</h2>
-  <div class="erro" id="erro"></div>
-  <label>Usuário</label>
-  <input type="text" id="usuario" autofocus onkeydown="if(event.key==='Enter') entrar()">
-  <label>Senha</label>
-  <input type="password" id="senha" onkeydown="if(event.key==='Enter') entrar()">
-  <button id="btn" onclick="entrar()">Entrar</button>
-  <div class="rodape">Acesso restrito</div>
-</div>
-<script>
-async function entrar() {
-  const usuario = document.getElementById('usuario').value.trim();
-  const senha = document.getElementById('senha').value;
-  const btn = document.getElementById('btn');
-  const erro = document.getElementById('erro');
+<div class="container">
+  <div class="topbar">
+    <div><h1>⚙️ Administração</h1><h2 id="subtitulo">—</h2></div>
+    <div>
+      <a href="/presidencia">← Voltar ao Painel</a>
+      <button class="btn vermelho" style="margin-top:0;margin-left:8px;padding:6px 12px;" onclick="sair()">Sair</button>
+    </div>
+  </div>
 
-  if (!usuario || !senha) {
-    erro.textContent = 'Preencha usuário e senha.';
-    erro.classList.add('ativo');
-    return;
+  <!-- ===== CARD DE BACKUP ===== -->
+  <div class="backup-card" id="backup-card">
+    <div class="backup-info">
+      <div class="titulo">☁️ Backup no Supabase</div>
+      <div class="status" id="backup-status">Verificando...</div>
+      <div class="ultimo" id="backup-ultimo">—</div>
+    </div>
+    <div class="backup-acoes">
+      <button class="btn-backup" id="btn-backup" onclick="salvarAgora()">💾 Salvar agora</button>
+      <span class="backup-msg" id="backup-msg"></span>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab ativo" onclick="mostrarPainel('presidencia')">Presidência</button>
+    <button class="tab" onclick="mostrarPainel('diretorias')">Diretorias</button>
+    <button class="tab" onclick="mostrarPainel('apoio')">Órgãos de Apoio</button>
+  </div>
+
+  <div class="painel ativo" id="painel-presidencia">
+    <div class="card">
+      <h3>Dados da Presidência</h3>
+      <div class="grid-2">
+        <div><label>Nome</label><input type="text" id="pres-nome"></div>
+        <div><label>Usuário</label><input type="text" id="pres-usuario"></div>
+      </div>
+      <label>Nova senha (deixe vazio para manter)</label>
+      <input type="password" id="pres-senha" placeholder="••••••••">
+      <button class="btn verde" onclick="salvarPresidencia()">💾 Salvar</button>
+      <div class="aviso" id="aviso-pres"></div>
+    </div>
+  </div>
+
+  <div class="painel" id="painel-diretorias">
+    <div id="lista-diretorias"></div>
+  </div>
+
+  <div class="painel" id="painel-apoio">
+    <div id="lista-apoio"></div>
+  </div>
+</div>
+
+<script>
+let estado = null;
+
+function mostrarPainel(nome) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('ativo'));
+  event.target.classList.add('ativo');
+  document.querySelectorAll('.painel').forEach(p => p.classList.remove('ativo'));
+  document.getElementById('painel-' + nome).classList.add('ativo');
+}
+
+function sair() {
+  document.cookie = 'token=; path=/; max-age=0';
+  localStorage.clear();
+  location.href = '/';
+}
+
+function aviso(id, msg, erro = false) {
+  const a = document.getElementById(id);
+  a.textContent = msg;
+  a.className = 'aviso ativo' + (erro ? ' erro' : '');
+  setTimeout(() => a.classList.remove('ativo'), 4000);
+}
+
+// ============ BACKUP ============
+async function carregarStatusBackup() {
+  try {
+    const res = await fetch('/api/backup-status');
+    if (!res.ok) return;
+    const data = await res.json();
+    const card = document.getElementById('backup-card');
+    const status = document.getElementById('backup-status');
+    const ultimo = document.getElementById('backup-ultimo');
+
+    if (data.habilitado) {
+      card.className = 'backup-card ativo';
+      status.innerHTML = '🟢 <b>Ativo</b> — backup automático a cada 2 minutos';
+    } else {
+      card.className = 'backup-card inativo';
+      status.innerHTML = '🔴 <b>Desativado</b> — falta a variável SUPABASE_SERVICE_KEY';
+    }
+
+    if (data.ultimo) {
+      const d = new Date(data.ultimo);
+      const diffMin = Math.round((Date.now() - d.getTime()) / 60000);
+      if (diffMin < 5) {
+        ultimo.className = 'ultimo';
+        ultimo.textContent = `Último backup: ${d.toLocaleTimeString('pt-BR')} (há ${diffMin} min)`;
+      } else if (diffMin < 30) {
+        ultimo.className = 'ultimo alerta';
+        ultimo.textContent = `⚠️ Último backup: ${d.toLocaleTimeString('pt-BR')} (há ${diffMin} min)`;
+      } else {
+        ultimo.className = 'ultimo erro';
+        ultimo.textContent = `🔴 Último backup: ${d.toLocaleString('pt-BR')} (há ${diffMin} min)`;
+      }
+    } else {
+      ultimo.className = 'ultimo alerta';
+      ultimo.textContent = '⏳ Nenhum backup realizado ainda';
+    }
+  } catch (e) {
+    console.error(e);
   }
+}
+
+async function salvarAgora() {
+  const btn = document.getElementById('btn-backup');
+  const msg = document.getElementById('backup-msg');
 
   btn.disabled = true;
-  btn.textContent = 'Verificando...';
-  erro.classList.remove('ativo');
+  btn.textContent = '⏳ Salvando...';
+  msg.className = 'backup-msg';
 
   try {
-    const res = await fetch('/api/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ usuario, senha })
-    });
+    const res = await fetch('/api/backup-now', { method: 'POST' });
     const data = await res.json();
 
     if (data.ok) {
-      document.cookie = `token=${data.token}; path=/; max-age=${24*60*60}; SameSite=Strict`;
-      localStorage.setItem('token_ubs', data.token);
-      localStorage.setItem('papel', data.papel);
-      localStorage.setItem('dados_usuario', JSON.stringify(data.dados));
-
-      // Redireciona para o painel correto
-      if (data.papel === 'presidencia') location.href = '/presidencia';
-      else if (data.papel === 'diretoria') location.href = '/diretoria';
-      else if (data.papel === 'apoio') location.href = '/apoio';
-      else location.href = '/';
+      msg.textContent = '✅ Backup realizado com sucesso!';
+      msg.className = 'backup-msg ativo';
+      setTimeout(() => msg.classList.remove('ativo'), 4000);
+      carregarStatusBackup();
     } else {
-      erro.textContent = data.erro || 'Usuário ou senha inválidos.';
-      erro.classList.add('ativo');
-      btn.disabled = false;
-      btn.textContent = 'Entrar';
-      document.getElementById('senha').value = '';
-      document.getElementById('senha').focus();
+      msg.textContent = '❌ Falha ao salvar';
+      msg.className = 'backup-msg ativo erro';
+      setTimeout(() => msg.classList.remove('ativo'), 4000);
     }
   } catch (e) {
-    erro.textContent = 'Erro de conexão com o servidor.';
-    erro.classList.add('ativo');
+    msg.textContent = '❌ Erro de conexão';
+    msg.className = 'backup-msg ativo erro';
+    setTimeout(() => msg.classList.remove('ativo'), 4000);
+  } finally {
     btn.disabled = false;
-    btn.textContent = 'Entrar';
+    btn.textContent = '💾 Salvar agora';
   }
 }
+
+// ============ ESTADO ============
+async function carregarEstado() {
+  try {
+    const res = await fetch('/api/admin/estado');
+    if (!res.ok) { location.href = '/'; return; }
+    const data = await res.json();
+    estado = data.estado;
+    renderTudo();
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+function renderTudo() {
+  document.getElementById('subtitulo').textContent = estado.presidencia.nome;
+  document.getElementById('pres-nome').value = estado.presidencia.nome;
+  document.getElementById('pres-usuario').value = estado.presidencia.usuario;
+  document.getElementById('pres-senha').value = '';
+
+  const ld = document.getElementById('lista-diretorias');
+  ld.innerHTML = '';
+  estado.diretorias.forEach(dir => {
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML = `
+      <h3>${dir.nome}</h3>
+      <div class="grid-2">
+        <div><label>Diretor(a)</label><input type="text" value="${dir.diretor || ''}" onchange="salvarDiretoria('${dir.id}','diretor',this.value)"></div>
+        <div><label>Usuário</label><input type="text" value="${dir.usuario}" onchange="salvarDiretoria('${dir.id}','usuario',this.value)"></div>
+      </div>
+      <label>Nova senha (deixe vazio para manter)</label>
+      <input type="password" placeholder="••••••••" onchange="salvarDiretoria('${dir.id}','senha',this.value)">
+      <div style="margin-top:16px;">
+        <label>Unidades (${dir.unidades.length})</label>
+        <div id="unidades-${dir.id}"></div>
+        <div style="display:flex;gap:8px;margin-top:10px;">
+          <input type="text" id="nova-id-${dir.id}" placeholder="ID (ex: usf-25)" style="flex:1;">
+          <input type="text" id="nova-nome-${dir.id}" placeholder="Nome da unidade" style="flex:2;">
+          <input type="text" id="nova-regiao-${dir.id}" placeholder="Região" style="flex:1;">
+          <button class="btn verde" style="margin-top:0;padding:8px 14px;" onclick="adicionarUnidade('${dir.id}')">+ Adicionar</button>
+        </div>
+      </div>
+    `;
+    ld.appendChild(card);
+
+    const container = document.getElementById('unidades-' + dir.id);
+    if (dir.unidades.length === 0) {
+      container.innerHTML = '<div style="color:#64748b;font-size:12px;padding:8px;">Nenhuma unidade cadastrada.</div>';
+    } else {
+      dir.unidades.forEach(u => {
+        const item = document.createElement('div');
+        item.className = 'unidade-item';
+        item.innerHTML = `
+          <div>
+            <div class="nome">${u.nome}</div>
+            <div class="meta">ID: ${u.id} • Região: ${u.regiao || '—'}</div>
+          </div>
+          <button onclick="removerUnidade('${dir.id}','${u.id}')">🗑️</button>
+        `;
+        container.appendChild(item);
+      });
+    }
+  });
+
+  const la = document.getElementById('lista-apoio');
+  la.innerHTML = '';
+  estado.orgaos_apoio.forEach(o => {
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML = `
+      <h3>${o.nome}</h3>
+      <div class="grid-2">
+        <div><label>Responsável</label><input type="text" value="${o.responsavel || ''}" onchange="salvarApoio('${o.id}','responsavel',this.value)"></div>
+        <div><label>Usuário</label><input type="text" value="${o.usuario}" onchange="salvarApoio('${o.id}','usuario',this.value)"></div>
+      </div>
+      <label>Nova senha (deixe vazio para manter)</label>
+      <input type="password" placeholder="••••••••" onchange="salvarApoio('${o.id}','senha',this.value)">
+    `;
+    la.appendChild(card);
+  });
+}
+
+async function salvarPresidencia() {
+  const nome = document.getElementById('pres-nome').value.trim();
+  const usuario = document.getElementById('pres-usuario').value.trim();
+  const senha = document.getElementById('pres-senha').value;
+  const body = { nome, usuario };
+  if (senha) body.senha = senha;
+  const res = await fetch('/api/admin/presidencia', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+  });
+  if (res.ok) {
+    aviso('aviso-pres', '✅ Dados salvos (backup enviado)');
+    document.getElementById('pres-senha').value = '';
+    carregarEstado();
+    carregarStatusBackup();
+  } else {
+    aviso('aviso-pres', '❌ Erro ao salvar', true);
+  }
+}
+
+async function salvarDiretoria(id, campo, valor) {
+  if (!valor) return;
+  const body = { id };
+  body[campo] = valor;
+  const res = await fetch('/api/admin/diretoria', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+  });
+  if (res.ok) { carregarEstado(); carregarStatusBackup(); }
+}
+
+async function salvarApoio(id, campo, valor) {
+  if (!valor) return;
+  const body = { id };
+  body[campo] = valor;
+  const res = await fetch('/api/admin/apoio', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+  });
+  if (res.ok) { carregarEstado(); carregarStatusBackup(); }
+}
+
+async function adicionarUnidade(dirId) {
+  const id = document.getElementById('nova-id-' + dirId).value.trim();
+  const nome = document.getElementById('nova-nome-' + dirId).value.trim();
+  const regiao = document.getElementById('nova-regiao-' + dirId).value.trim();
+  if (!id || !nome) return alert('Preencha ID e Nome');
+  const res = await fetch('/api/admin/unidade', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ diretoria_id: dirId, id, nome, regiao })
+  });
+  if (res.ok) {
+    document.getElementById('nova-id-' + dirId).value = '';
+    document.getElementById('nova-nome-' + dirId).value = '';
+    document.getElementById('nova-regiao-' + dirId).value = '';
+    carregarEstado();
+    carregarStatusBackup();
+  } else {
+    alert('Erro ao adicionar (verifique se o ID já existe)');
+  }
+}
+
+async function removerUnidade(dirId, ubsId) {
+  if (!confirm('Remover esta unidade?')) return;
+  const res = await fetch('/api/admin/unidade/remover', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ diretoria_id: dirId, unidade_id: ubsId })
+  });
+  if (res.ok) { carregarEstado(); carregarStatusBackup(); }
+}
+
+// ============ INICIALIZA ============
+carregarStatusBackup();
+carregarEstado();
+
+// Atualiza status do backup a cada 30s
+setInterval(carregarStatusBackup, 30000);
 
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/sw.js').catch(() => {});
