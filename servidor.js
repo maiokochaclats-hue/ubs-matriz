@@ -246,24 +246,67 @@ function podeInteragir(origem, destino) {
 function tratarMensagem(cliente, msg) {
   if (!msg || !msg.type) return;
 
+  // ===== HANDSHAKE =====
   if (msg.type === 'ola_matriz' || msg.type === 'ola_diretoria' || msg.type === 'ola_presidencia' || msg.type === 'ola_apoio') {
     cliente.papel = msg.type.replace('ola_', '');
     cliente.usuario = msg.usuario || null;
 
-    // Se for matriz antiga, envia estado inicial das USFs ativas
+    // Lista completa de unidades (usada por matriz, presidência e apoio)
+    const listaTodas = (() => {
+      const todas = [];
+      estado.diretorias.forEach(d => {
+        d.unidades.forEach(u => todas.push({ id: u.id, nome: u.nome, regiao: u.regiao || d.nome }));
+      });
+      return todas;
+    })();
+
+    // Matriz antiga: recebe TUDO
     if (msg.type === 'ola_matriz') {
       enviarWS(cliente, {
         type: 'estado_inicial',
         ubs: Object.values(ubsMap),
-        listaUSF: (() => {
-          const todas = [];
-          estado.diretorias.forEach(d => {
-            d.unidades.forEach(u => todas.push({ id: u.id, nome: u.nome, regiao: u.regiao || d.nome }));
-          });
-          return todas;
-        })()
+        listaUSF: listaTodas
       });
+      return;
     }
+
+    // Diretoria: recebe só as unidades da sua diretoria
+    if (msg.type === 'ola_diretoria') {
+      const dirId = msg.usuario;
+      const dir = estado.diretorias.find(d => d.id === dirId);
+      if (!dir) return;
+
+      const idsDaDiretoria = dir.unidades.map(u => u.id);
+      const ubsFiltradas = Object.values(ubsMap).filter(u => idsDaDiretoria.includes(u.id));
+
+      enviarWS(cliente, {
+        type: 'estado_inicial',
+        ubs: ubsFiltradas,
+        listaUSF: dir.unidades.map(u => ({ id: u.id, nome: u.nome, regiao: u.regiao || dir.nome }))
+      });
+      return;
+    }
+
+    // Presidência: recebe TUDO
+    if (msg.type === 'ola_presidencia') {
+      enviarWS(cliente, {
+        type: 'estado_inicial',
+        ubs: Object.values(ubsMap),
+        listaUSF: listaTodas
+      });
+      return;
+    }
+
+    // Apoio: recebe TUDO (só consulta)
+    if (msg.type === 'ola_apoio') {
+      enviarWS(cliente, {
+        type: 'estado_inicial',
+        ubs: Object.values(ubsMap),
+        listaUSF: listaTodas
+      });
+      return;
+    }
+
     return;
   }
 
@@ -273,6 +316,7 @@ function tratarMensagem(cliente, msg) {
     return;
   }
 
+  // ===== DADOS =====
   if (msg.type === 'dados_setor' && msg.ubs_id) {
     const ubs = ubsMap[msg.ubs_id];
     if (!ubs) return;
@@ -462,7 +506,7 @@ const server = http.createServer(async (req, res) => {
     return json(res, 200, { ok: !!t, papel: t?.papel, dados: t?.dados });
   }
 
-  // ===== LISTA PÚBLICA DE UNIDADES (dropdown da filial) =====
+  // ===== LISTA PÚBLICA DE UNIDADES =====
   if (url === '/api/usfs') {
     const todas = [];
     estado.diretorias.forEach(d => {
@@ -477,7 +521,7 @@ const server = http.createServer(async (req, res) => {
     return json(res, 200, { usfs: todas });
   }
 
-  // ===== LISTA DE UNIDADES (por diretoria, requer login) =====
+  // ===== LISTA DE UNIDADES (por diretoria) =====
   if (url === '/api/unidades') {
     const t = getToken(req);
     if (!t) return json(res, 401, { ok: false });
@@ -638,7 +682,7 @@ const server = http.createServer(async (req, res) => {
     if (url === '/admin') return htmlFile(res, 'admin.html');
   }
 
-  // ===== MATRIZ ANTIGA (compatibilidade) =====
+  // ===== MATRIZ ANTIGA =====
   if (url === '/matriz') {
     return htmlFile(res, 'matriz.html');
   }
@@ -675,7 +719,7 @@ server.listen(PORTA, '0.0.0.0', () => {
     .filter(i => i.family === 'IPv4' && !i.internal).map(i => i.address);
   console.log('\n🏛️ Servidor Fundação São Sebastião rodando!\n');
   console.log(`   Login:        http://localhost:${PORTA}/`);
-  console.log(`   Matriz (antiga): http://localhost:${PORTA}/matriz`);
+  console.log(`   Matriz:       http://localhost:${PORTA}/matriz`);
   console.log(`   Presidência:  http://localhost:${PORTA}/presidencia`);
   console.log(`   Diretoria:    http://localhost:${PORTA}/diretoria`);
   console.log(`   Apoio:        http://localhost:${PORTA}/apoio`);
