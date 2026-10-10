@@ -3,6 +3,7 @@ const https = require('https');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const { createClient } = require('@supabase/supabase-js');
 
 const PORTA = process.env.PORT || 3000;
 const ARQUIVO_DADOS = path.join(__dirname, 'dados.json');
@@ -10,6 +11,21 @@ const MAX_HISTORICO = 50;
 const MAX_MENSAGENS = 500;
 const TOKENS = new Set();
 const TIMEOUT_HEARTBEAT = 15 * 1000;
+const INTERVALO_BACKUP = 2 * 60 * 1000; // 2 minutos
+const TABELA_BACKUP = 'backup_estado';
+
+// ============ SUPABASE (SERVER-SIDE) ============
+const SUPABASE_URL = 'https://gtmgqvoesezshgsthxhr.supabase.co';
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || '';
+let supabaseServer = null;
+if (SUPABASE_SERVICE_KEY) {
+  supabaseServer = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
+    auth: { persistSession: false }
+  });
+  console.log('☁️ Supabase Backup: configurado');
+} else {
+  console.warn('⚠️ SUPABASE_SERVICE_KEY não definida — backup desabilitado');
+}
 
 // ============ CREDENCIAIS INICIAIS ============
 const DADOS_INICIAIS = {
@@ -113,6 +129,8 @@ const DADOS_INICIAIS = {
 let estado = JSON.parse(JSON.stringify(DADOS_INICIAIS));
 let ubsMap = {};
 const clientesWS = new Set();
+let ultimoBackupEm = null;
+let backupEmAndamento = false;
 
 // ============ TIMEOUT HEARTBEAT ============
 setInterval(() => {
@@ -126,8 +144,8 @@ setInterval(() => {
   });
 }, 5000);
 
-// ============ PERSISTÊNCIA ============
-function carregarDados() {
+// ============ PERSISTÊNCIA LOCAL ============
+function carregarDadosLocal() {
   try {
     if (fs.existsSync(ARQUIVO_DADOS)) {
       const raw = fs.readFileSync(ARQUIVO_DADOS, 'utf8');
@@ -136,19 +154,92 @@ function carregarDados() {
       estado = dados.estado || JSON.parse(JSON.stringify(DADOS_INICIAIS));
       if (!estado.mensagens) estado.mensagens = [];
       Object.values(ubsMap).forEach(u => { u.online = false; });
-      console.log(`💾 Dados carregados: ${Object.keys(ubsMap).length} unidades ativas, ${estado.mensagens.length} mensagens`);
-    } else {
-      estado = JSON.parse(JSON.stringify(DADOS_INICIAIS));
-      ubsMap = {};
-      console.log('🆕 Primeira execução: usando dados iniciais');
+      return true;
     }
   } catch (e) {
-    console.error('⚠️ Falha ao carregar dados.json:', e.message);
-    estado = JSON.parse(JSON.stringify(DADOS_INICIAIS));
-    ubsMap = {};
+    console.error('⚠️ Falha ao carregar dados.json local:', e.message);
+  }
+  return false;
+}
+
+// ============ BACKUP SUPABASE ============
+async function backupParaSupabase(forcar = false) {
+  if (!supabaseServer) return;
+  if (backupEmAndamento && !forcar) return;
+
+  backupEmAndamento = true;
+  try {
+    const payload = {
+      id: 1,
+      dados: { estado, ubsMap },
+      atualizado_em: new Date().toISOString()
+    };
+    const { error } = await supabaseServer
+      .from(TABELA_BACKUP)
+      .upsert(payload, { onConflict: 'id' });
+
+    if (error) throw error;
+
+    ultimoBackupEm = new Date();
+    console.log(`☁️ Backup enviado ao Supabase (${Object.keys(ubsMap).length} unidades, ${estado.mensagens.length} mensagens)`);
+  } catch (e) {
+    console.error('❌ Falha no backup Supabase:', e.message);
+  } finally {
+    backupEmAndamento = false;
   }
 }
 
+async function restaurarDoSupabase() {
+  if (!supabaseServer) return false;
+  try {
+    const { data, error } = await supabaseServer
+      .from(TABELA_BACKUP)
+      .select('dados, atualizado_em')
+      .eq('id', 1)
+      .maybeSingle();
+
+    if (error) throw error;
+    if (!data || !data.dados) return false;
+
+    ubsMap = data.dados.ubsMap || {};
+    estado = data.dados.estado || JSON.parse(JSON.stringify(DADOS_INICIAIS));
+    if (!estado.mensagens) estado.mensagens = [];
+    Object.values(ubsMap).forEach(u => { u.online = false; });
+
+    ultimoBackupEm = data.atualizado_em ? new Date(data.atualizado_em) : null;
+    console.log(`☁️ Estado restaurado do Supabase (backup de ${data.atualizado_em || 'data desconhecida'})`);
+    console.log(`   ${Object.keys(ubsMap).length} unidades, ${estado.mensagens.length} mensagens`);
+    return true;
+  } catch (e) {
+    console.error('⚠️ Falha ao restaurar do Supabase:', e.message);
+    return false;
+  }
+}
+
+async function carregarDados() {
+  // 1. Tenta carregar local
+  const carregouLocal = carregarDadosLocal();
+  if (carregouLocal) {
+    console.log(`💾 Dados carregados do arquivo local: ${Object.keys(ubsMap).length} unidades`);
+    return;
+  }
+
+  // 2. Se não tem local, tenta restaurar do Supabase
+  console.log('🔍 Arquivo local vazio — tentando restaurar do Supabase...');
+  const restaurou = await restaurarDoSupabase();
+  if (restaurou) {
+    // Salva localmente para próximas inicializações
+    salvarDados();
+    return;
+  }
+
+  // 3. Se nada funcionou, usa dados iniciais
+  console.log('🆕 Sem backup disponível — usando dados iniciais');
+  estado = JSON.parse(JSON.stringify(DADOS_INICIAIS));
+  ubsMap = {};
+}
+
+// Debounce para salvar no arquivo local
 let salvarTimer = null;
 function salvarDados() {
   clearTimeout(salvarTimer);
@@ -160,6 +251,11 @@ function salvarDados() {
     }
   }, 500);
 }
+
+// Agenda backup periódico
+setInterval(() => {
+  backupParaSupabase(false);
+}, INTERVALO_BACKUP);
 
 // ============ WEBSOCKET ============
 function aceitarWS(req, socket) {
@@ -238,7 +334,6 @@ function getNomePorUsuario(tipo, id) {
   return id;
 }
 
-// Verifica se origem pode enviar mensagem para destino
 function podeMensagem(origem, destino) {
   if (!origem || !destino) return false;
   if (origem.tipo === 'presidencia') {
@@ -260,14 +355,13 @@ function salvarMensagem(msg) {
   estado.mensagens.unshift(msg);
   if (estado.mensagens.length > MAX_MENSAGENS) estado.mensagens.length = MAX_MENSAGENS;
   salvarDados();
+  backupParaSupabase(true); // backup imediato
 }
 
-function enviarMensagemPara(destino, mensagem, remetenteCli) {
-  // Encontra clientes WS cujo papel e id batem com o destino
+function enviarMensagemPara(destino, mensagem) {
   clientesWS.forEach(c => {
     if (c.papel !== destino.tipo) return;
     if (destino.tipo === 'presidencia') {
-      // Presidência: só um usuário
       enviarWS(c, { type: 'mensagem_recebida', mensagem });
     } else if (c.usuario === destino.id) {
       enviarWS(c, { type: 'mensagem_recebida', mensagem });
@@ -275,10 +369,10 @@ function enviarMensagemPara(destino, mensagem, remetenteCli) {
   });
 }
 
+// ============ TRATAR MENSAGENS WS ============
 function tratarMensagem(cliente, msg) {
   if (!msg || !msg.type) return;
 
-  // ===== HANDSHAKE =====
   if (msg.type === 'ola_matriz' || msg.type === 'ola_diretoria' || msg.type === 'ola_presidencia' || msg.type === 'ola_apoio') {
     cliente.papel = msg.type.replace('ola_', '');
     cliente.usuario = msg.usuario || null;
@@ -315,7 +409,6 @@ function tratarMensagem(cliente, msg) {
       enviarWS(cliente, { type: 'estado_inicial', ubs: Object.values(ubsMap), listaUSF: listaTodas });
       return;
     }
-
     return;
   }
 
@@ -325,19 +418,16 @@ function tratarMensagem(cliente, msg) {
     return;
   }
 
-  // ===== ENVIO DE MENSAGEM =====
   if (msg.type === 'enviar_mensagem') {
     const { destino_tipo, destino_id, assunto, prioridade, corpo, anexos } = msg;
-
-    // Permissão
     const origem = { tipo: cliente.papel === 'matriz' ? 'presidencia' : cliente.papel, id: cliente.usuario };
     const destino = { tipo: destino_tipo, id: destino_id };
+
     if (!podeMensagem(origem, destino)) {
-      enviarWS(cliente, { type: 'erro_mensagem', texto: 'Você não tem permissão para enviar a este destinatário' });
+      enviarWS(cliente, { type: 'erro_mensagem', texto: 'Sem permissão para este destinatário' });
       return;
     }
 
-    // Monta mensagem
     const mensagem = {
       id: crypto.randomBytes(8).toString('hex'),
       de_tipo: origem.tipo,
@@ -355,28 +445,18 @@ function tratarMensagem(cliente, msg) {
     };
 
     salvarMensagem(mensagem);
-
-    // Envia para o destinatário em tempo real
-    enviarMensagemPara(destino, mensagem, cliente);
-
-    // Confirma para o remetente
+    enviarMensagemPara(destino, mensagem);
     enviarWS(cliente, { type: 'mensagem_enviada', mensagem });
-
-    console.log(`📨 Mensagem: ${mensagem.de_nome} → ${mensagem.para_nome}`);
+    console.log(`📨 ${mensagem.de_nome} → ${mensagem.para_nome}`);
     return;
   }
 
-  // ===== MARCAR COMO LIDA =====
   if (msg.type === 'marcar_mensagem_lida' && msg.mensagem_id) {
     const m = estado.mensagens.find(x => x.id === msg.mensagem_id);
-    if (m) {
-      m.lida = true;
-      salvarDados();
-    }
+    if (m) { m.lida = true; salvarDados(); }
     return;
   }
 
-  // ===== DADOS / HEARTBEAT / DOCS (mantidos) =====
   if (msg.type === 'dados_setor' && msg.ubs_id) {
     const ubs = ubsMap[msg.ubs_id];
     if (!ubs) return;
@@ -421,12 +501,8 @@ function tratarMensagem(cliente, msg) {
     if (!ubs.documentos) ubs.documentos = [];
     msg.documentos.forEach(doc => {
       ubs.documentos.unshift({
-        ...doc,
-        setor_id: msg.setor_id,
-        setor_nome: msg.setor_nome,
-        origem: 'filial',
-        destino: 'matriz',
-        ts: new Date().toISOString()
+        ...doc, setor_id: msg.setor_id, setor_nome: msg.setor_nome,
+        origem: 'filial', destino: 'matriz', ts: new Date().toISOString()
       });
     });
     if (ubs.documentos.length > 200) ubs.documentos.length = 200;
@@ -434,13 +510,9 @@ function tratarMensagem(cliente, msg) {
     ubs.online = true;
     salvarDados();
     broadcast({
-      type: 'documento_recebido',
-      ubs_id: msg.ubs_id,
-      ubs_nome: ubs.nome,
-      setor_id: msg.setor_id,
-      setor_nome: msg.setor_nome,
-      documentos: msg.documentos,
-      origem: 'filial'
+      type: 'documento_recebido', ubs_id: msg.ubs_id, ubs_nome: ubs.nome,
+      setor_id: msg.setor_id, setor_nome: msg.setor_nome,
+      documentos: msg.documentos, origem: 'filial'
     });
     return;
   }
@@ -451,24 +523,15 @@ function tratarMensagem(cliente, msg) {
     if (!ubs.documentos) ubs.documentos = [];
     msg.documentos.forEach(doc => {
       ubs.documentos.unshift({
-        ...doc,
-        setor_id: null,
-        setor_nome: null,
-        origem: 'matriz',
-        destino: 'filial',
-        ts: new Date().toISOString()
+        ...doc, setor_id: null, setor_nome: null,
+        origem: 'matriz', destino: 'filial', ts: new Date().toISOString()
       });
     });
     if (ubs.documentos.length > 200) ubs.documentos.length = 200;
     salvarDados();
     broadcast({
-      type: 'documento_recebido',
-      ubs_id: msg.ubs_id,
-      ubs_nome: ubs.nome,
-      setor_id: null,
-      setor_nome: null,
-      documentos: msg.documentos,
-      origem: 'matriz'
+      type: 'documento_recebido', ubs_id: msg.ubs_id, ubs_nome: ubs.nome,
+      setor_id: null, setor_nome: null, documentos: msg.documentos, origem: 'matriz'
     });
     return;
   }
@@ -476,9 +539,7 @@ function tratarMensagem(cliente, msg) {
   if (msg.type === 'marcar_docs_lidos' && msg.ubs_id) {
     const ubs = ubsMap[msg.ubs_id];
     if (ubs && ubs.documentos) {
-      ubs.documentos.forEach(d => {
-        if (d.origem !== msg.origem) d.lido = true;
-      });
+      ubs.documentos.forEach(d => { if (d.origem !== msg.origem) d.lido = true; });
       salvarDados();
     }
     return;
@@ -501,29 +562,22 @@ function htmlFile(res, nome) {
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }); res.end(d);
   });
 }
-
 function autenticar(usuario, senha) {
   if (estado.presidencia && estado.presidencia.usuario === usuario && estado.presidencia.senha === senha) {
     return { ok: true, papel: 'presidencia', dados: { id: 'presidencia', nome: estado.presidencia.nome, cargo: estado.presidencia.cargo } };
   }
   const dir = estado.diretorias.find(d => d.usuario === usuario && d.senha === senha);
-  if (dir) {
-    return { ok: true, papel: 'diretoria', dados: { id: dir.id, nome: dir.nome, diretor: dir.diretor } };
-  }
+  if (dir) return { ok: true, papel: 'diretoria', dados: { id: dir.id, nome: dir.nome, diretor: dir.diretor } };
   const apoio = estado.orgaos_apoio.find(o => o.usuario === usuario && o.senha === senha);
-  if (apoio) {
-    return { ok: true, papel: 'apoio', dados: { id: apoio.id, nome: apoio.nome, responsavel: apoio.responsavel } };
-  }
+  if (apoio) return { ok: true, papel: 'apoio', dados: { id: apoio.id, nome: apoio.nome, responsavel: apoio.responsavel } };
   return { ok: false };
 }
-
 function getToken(req) {
   const cookie = req.headers.cookie || '';
   const t = cookie.match(/token=([a-f0-9]+)/)?.[1];
   if (!t) return null;
   return [...TOKENS].find(x => x.token === t) || null;
 }
-
 function requirePresidencia(req) {
   const t = getToken(req);
   return t && t.papel === 'presidencia';
@@ -546,9 +600,7 @@ const server = http.createServer(async (req, res) => {
     if (r.ok) {
       const token = crypto.randomBytes(24).toString('hex');
       TOKENS.add({ token, papel: r.papel, dados: r.dados, ts: Date.now() });
-      setTimeout(() => {
-        for (const t of TOKENS) if (t.token === token) TOKENS.delete(t);
-      }, 24 * 60 * 60 * 1000);
+      setTimeout(() => { for (const t of TOKENS) if (t.token === token) TOKENS.delete(t); }, 24*60*60*1000);
       return json(res, 200, { ok: true, token, papel: r.papel, dados: r.dados });
     }
     return json(res, 401, { ok: false, erro: 'Usuário ou senha inválidos' });
@@ -566,22 +618,18 @@ const server = http.createServer(async (req, res) => {
     return json(res, 200, { ok: !!t, papel: t?.papel, dados: t?.dados });
   }
 
-  // ===== LISTA PÚBLICA DE UNIDADES =====
+  // ===== LISTA PÚBLICA =====
   if (url === '/api/usfs') {
     const todas = [];
     estado.diretorias.forEach(d => {
-      d.unidades.forEach(u => {
-        todas.push({ id: u.id, nome: u.nome, regiao: u.regiao || d.nome });
-      });
+      d.unidades.forEach(u => todas.push({ id: u.id, nome: u.nome, regiao: u.regiao || d.nome }));
     });
     return json(res, 200, { usfs: todas });
   }
 
-  // ===== LISTA DE UNIDADES =====
   if (url === '/api/unidades') {
     const t = getToken(req);
     if (!t) return json(res, 401, { ok: false });
-
     if (t.papel === 'presidencia' || t.papel === 'apoio') {
       const todas = [];
       estado.diretorias.forEach(d => {
@@ -601,47 +649,54 @@ const server = http.createServer(async (req, res) => {
   if (url === '/api/mensagens' && req.method === 'GET') {
     const t = getToken(req);
     if (!t) return json(res, 401, { ok: false });
-
     const meuTipo = t.papel;
     const meuId = t.dados?.id || null;
-
     const recebidas = estado.mensagens.filter(m =>
-      m.para_tipo === meuTipo && (meuTipo === 'presidencia' || m.para_id === meuId)
-    );
+      m.para_tipo === meuTipo && (meuTipo === 'presidencia' || m.para_id === meuId));
     const enviadas = estado.mensagens.filter(m =>
-      m.de_tipo === meuTipo && (meuTipo === 'presidencia' || m.de_id === meuId)
-    );
-
+      m.de_tipo === meuTipo && (meuTipo === 'presidencia' || m.de_id === meuId));
     return json(res, 200, { ok: true, recebidas, enviadas });
   }
 
   if (url === '/api/mensagens/destinatarios' && req.method === 'GET') {
     const t = getToken(req);
     if (!t) return json(res, 401, { ok: false });
-
     const destinos = [];
     if (t.papel === 'diretoria' || t.papel === 'apoio') {
       destinos.push({ tipo: 'presidencia', id: 'presidencia', nome: 'Presidência' });
     }
     if (t.papel === 'presidencia') {
-      estado.diretorias.forEach(d => {
-        destinos.push({ tipo: 'diretoria', id: d.id, nome: d.nome });
-      });
-      estado.orgaos_apoio.forEach(o => {
-        destinos.push({ tipo: 'apoio', id: o.id, nome: o.nome });
-      });
+      estado.diretorias.forEach(d => destinos.push({ tipo: 'diretoria', id: d.id, nome: d.nome }));
+      estado.orgaos_apoio.forEach(o => destinos.push({ tipo: 'apoio', id: o.id, nome: o.nome }));
     }
     if (t.papel === 'diretoria') {
-      estado.orgaos_apoio.forEach(o => {
-        destinos.push({ tipo: 'apoio', id: o.id, nome: o.nome });
-      });
+      estado.orgaos_apoio.forEach(o => destinos.push({ tipo: 'apoio', id: o.id, nome: o.nome }));
     }
     if (t.papel === 'apoio') {
-      estado.diretorias.forEach(d => {
-        destinos.push({ tipo: 'diretoria', id: d.id, nome: d.nome });
-      });
+      estado.diretorias.forEach(d => destinos.push({ tipo: 'diretoria', id: d.id, nome: d.nome }));
     }
     return json(res, 200, { ok: true, destinos });
+  }
+
+  // ===== BACKUP MANUAL =====
+  if (url === '/api/backup-now' && req.method === 'POST') {
+    if (!requirePresidencia(req)) return json(res, 403, { ok: false });
+    await backupParaSupabase(true);
+    return json(res, 200, {
+      ok: true,
+      ultimo: ultimoBackupEm ? ultimoBackupEm.toISOString() : null,
+      habilitado: !!supabaseServer
+    });
+  }
+
+  if (url === '/api/backup-status' && req.method === 'GET') {
+    if (!requirePresidencia(req)) return json(res, 403, { ok: false });
+    return json(res, 200, {
+      ok: true,
+      habilitado: !!supabaseServer,
+      ultimo: ultimoBackupEm ? ultimoBackupEm.toISOString() : null,
+      emAndamento: backupEmAndamento
+    });
   }
 
   // ===== ADMIN =====
@@ -654,12 +709,13 @@ const server = http.createServer(async (req, res) => {
     if (!requirePresidencia(req)) return json(res, 403, { ok: false });
     const body = await lerCorpo(req);
     const d = estado.diretorias.find(x => x.id === body.id);
-    if (!d) return json(res, 404, { ok: false, erro: 'Diretoria não encontrada' });
+    if (!d) return json(res, 404, { ok: false });
     if (body.nome) d.nome = body.nome;
     if (body.diretor) d.diretor = body.diretor;
     if (body.usuario) d.usuario = body.usuario;
     if (body.senha) d.senha = body.senha;
     salvarDados();
+    backupParaSupabase(true);
     return json(res, 200, { ok: true, diretoria: d });
   }
 
@@ -667,12 +723,11 @@ const server = http.createServer(async (req, res) => {
     if (!requirePresidencia(req)) return json(res, 403, { ok: false });
     const body = await lerCorpo(req);
     const d = estado.diretorias.find(x => x.id === body.diretoria_id);
-    if (!d) return json(res, 404, { ok: false, erro: 'Diretoria não encontrada' });
-    if (d.unidades.some(u => u.id === body.id)) {
-      return json(res, 400, { ok: false, erro: 'ID já existe' });
-    }
+    if (!d) return json(res, 404, { ok: false });
+    if (d.unidades.some(u => u.id === body.id)) return json(res, 400, { ok: false, erro: 'ID já existe' });
     d.unidades.push({ id: body.id, nome: body.nome, regiao: body.regiao || d.nome });
     salvarDados();
+    backupParaSupabase(true);
     return json(res, 200, { ok: true, diretoria: d });
   }
 
@@ -683,6 +738,7 @@ const server = http.createServer(async (req, res) => {
     if (!d) return json(res, 404, { ok: false });
     d.unidades = d.unidades.filter(u => u.id !== body.unidade_id);
     salvarDados();
+    backupParaSupabase(true);
     return json(res, 200, { ok: true, diretoria: d });
   }
 
@@ -696,6 +752,7 @@ const server = http.createServer(async (req, res) => {
     if (body.usuario) o.usuario = body.usuario;
     if (body.senha) o.senha = body.senha;
     salvarDados();
+    backupParaSupabase(true);
     return json(res, 200, { ok: true, orgao: o });
   }
 
@@ -706,20 +763,17 @@ const server = http.createServer(async (req, res) => {
     if (body.usuario) estado.presidencia.usuario = body.usuario;
     if (body.senha) estado.presidencia.senha = body.senha;
     salvarDados();
+    backupParaSupabase(true);
     return json(res, 200, { ok: true, presidencia: estado.presidencia });
   }
 
-  // ===== REGISTRO DE UNIDADE =====
+  // ===== REGISTRO =====
   if (url === '/api/registrar' && req.method === 'POST') {
     const body = await lerCorpo(req);
     const id = body.ubs_id;
     const existente = ubsMap[id];
-
     const dir = encontrarDiretoriaDaUnidade(id);
-    if (!dir) {
-      return json(res, 404, { ok: false, erro: 'Unidade não cadastrada em nenhuma diretoria' });
-    }
-
+    if (!dir) return json(res, 404, { ok: false, erro: 'Unidade não cadastrada' });
     const unidade = dir.unidades.find(u => u.id === id);
 
     const setoresNovos = (body.setores || []).map(s => {
@@ -733,20 +787,15 @@ const server = http.createServer(async (req, res) => {
     });
 
     ubsMap[id] = {
-      id,
-      nome: unidade.nome,
-      regiao: unidade.regiao,
-      diretoria_id: dir.id,
-      diretoria_nome: dir.nome,
-      online: true,
-      ultimoHeartbeat: Date.now(),
+      id, nome: unidade.nome, regiao: unidade.regiao,
+      diretoria_id: dir.id, diretoria_nome: dir.nome,
+      online: true, ultimoHeartbeat: Date.now(),
       setores: setoresNovos,
       documentos: existente?.documentos || [],
       novosDados: existente?.novosDados || 0
     };
     salvarDados();
     broadcast({ type: 'ubs_registrada', ubs: ubsMap[id] });
-    console.log(`✅ Unidade registrada: ${unidade.nome} (${id}) → ${dir.nome}`);
     return json(res, 200, { ok: true, ubs: ubsMap[id] });
   }
 
@@ -765,16 +814,14 @@ const server = http.createServer(async (req, res) => {
     return res.end(JSON.stringify({ estado, ubsMap }, null, 2));
   }
 
-  // ===== PÁGINAS PROTEGIDAS =====
+  // ===== PÁGINAS =====
   if (url === '/presidencia' || url === '/diretoria' || url === '/apoio' || url === '/admin') {
     const t = getToken(req);
     if (!t) return htmlFile(res, 'login.html');
-
     if (url === '/presidencia' && t.papel !== 'presidencia') return htmlFile(res, 'login.html');
     if (url === '/diretoria' && t.papel !== 'diretoria') return htmlFile(res, 'login.html');
     if (url === '/apoio' && t.papel !== 'apoio') return htmlFile(res, 'login.html');
     if (url === '/admin' && t.papel !== 'presidencia') return htmlFile(res, 'login.html');
-
     if (url === '/presidencia') return htmlFile(res, 'presidencia.html');
     if (url === '/diretoria') return htmlFile(res, 'diretoria.html');
     if (url === '/apoio') return htmlFile(res, 'apoio.html');
@@ -805,27 +852,31 @@ const server = http.createServer(async (req, res) => {
   res.writeHead(404); res.end('Rota não encontrada');
 });
 
-carregarDados();
-
-server.listen(PORTA, '0.0.0.0', () => {
-  const os = require('os');
-  const ips = Object.values(os.networkInterfaces()).flat()
-    .filter(i => i.family === 'IPv4' && !i.internal).map(i => i.address);
-  console.log('\n🏛️ Servidor Fundação São Sebastião rodando!\n');
-  console.log(`   Login:        http://localhost:${PORTA}/`);
-  console.log(`   Matriz:       http://localhost:${PORTA}/matriz`);
-  console.log(`   Presidência:  http://localhost:${PORTA}/presidencia`);
-  console.log(`   Diretoria:    http://localhost:${PORTA}/diretoria`);
-  console.log(`   Apoio:        http://localhost:${PORTA}/apoio`);
-  console.log(`   Admin:        http://localhost:${PORTA}/admin`);
-  console.log(`   Filial:       http://localhost:${PORTA}/filial`);
-  ips.forEach(ip => {
-    console.log(`   LAN:          http://${ip}:${PORTA}/`);
+// ============ INICIALIZAÇÃO ============
+carregarDados().then(() => {
+  server.listen(PORTA, '0.0.0.0', () => {
+    const os = require('os');
+    const ips = Object.values(os.networkInterfaces()).flat()
+      .filter(i => i.family === 'IPv4' && !i.internal).map(i => i.address);
+    console.log('\n🏛️ Servidor Fundação São Sebastião rodando!\n');
+    console.log(`   Login:        http://localhost:${PORTA}/`);
+    console.log(`   Presidência:  http://localhost:${PORTA}/presidencia`);
+    console.log(`   Diretoria:    http://localhost:${PORTA}/diretoria`);
+    console.log(`   Apoio:        http://localhost:${PORTA}/apoio`);
+    console.log(`   Admin:        http://localhost:${PORTA}/admin`);
+    console.log(`   Filial:       http://localhost:${PORTA}/filial`);
+    ips.forEach(ip => console.log(`   LAN:          http://${ip}:${PORTA}/`));
+    console.log(`\n📋 ${estado.diretorias.length} diretorias | ${estado.orgaos_apoio.length} órgãos de apoio`);
+    if (supabaseServer) {
+      console.log(`☁️ Backup Supabase: ativo (a cada ${INTERVALO_BACKUP/60000} min)`);
+    } else {
+      console.log(`⚠️ Backup Supabase: DESABILITADO (falta SUPABASE_SERVICE_KEY)`);
+    }
+    console.log('   (deixe esta janela aberta)\n');
   });
-  console.log(`\n📋 ${estado.diretorias.length} diretorias | ${estado.orgaos_apoio.length} órgãos de apoio`);
-  console.log('   (deixe esta janela aberta)\n');
 });
 
+// ============ KEEP-ALIVE ============
 const URL_EXTERNA = process.env.RENDER_EXTERNAL_URL;
 if (URL_EXTERNA) {
   setInterval(() => {
