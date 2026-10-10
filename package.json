@@ -4,5 +4,8 @@
   "main": "servidor.js",
   "scripts": {
     "start": "node servidor.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.0"
   }
 }
