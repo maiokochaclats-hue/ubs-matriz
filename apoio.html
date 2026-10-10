@@ -7,49 +7,223 @@
 <title>Órgão de Apoio — Fundação São Sebastião</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: system-ui, sans-serif; background: #0f172a; color: #e2e8f0; min-height: 100vh; padding: 20px; }
-  .container { max-width: 1100px; margin: 0 auto; }
-  .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; padding: 16px 20px; background: #1e293b; border-radius: 12px; border: 1px solid #334155; }
+  body { font-family: system-ui, sans-serif; background: #0f172a; color: #e2e8f0; padding: 20px; }
   h1 { font-size: 20px; color: #f1f5f9; }
-  h2 { font-size: 13px; color: #94a3b8; font-weight: normal; margin-top: 4px; }
-  .btn { background: #3b82f6; border: none; color: white; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 600; }
-  .btn.vermelho { background: #7f1d1d; }
-  .btn:hover { opacity: 0.9; }
-  .card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 32px; text-align: center; }
-  .card h3 { font-size: 24px; color: #f1f5f9; margin-bottom: 8px; }
-  .card p { color: #94a3b8; font-size: 14px; margin-bottom: 20px; }
-  .icone { font-size: 56px; margin-bottom: 16px; display: block; }
-  .provisorio { background: #7c2d12; border: 1px solid #ea580c; color: #fed7aa; padding: 14px 20px; border-radius: 10px; font-size: 13px; margin-bottom: 20px; }
+  h2 { font-size: 13px; color: #94a3b8; font-weight: normal; margin-bottom: 16px; }
+  .container { max-width: 1500px; margin: 0 auto; }
+  .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding: 16px 20px; background: #1e293b; border-radius: 12px; border: 1px solid #334155; flex-wrap: wrap; gap: 12px; }
+  .topbar .info { display: flex; flex-direction: column; }
+  .topbar .titulo { font-size: 20px; color: #f1f5f9; font-weight: 600; }
+  .topbar .subtitulo { font-size: 13px; color: #94a3b8; margin-top: 2px; }
+  .stats { display: flex; gap: 14px; font-size: 13px; align-items: center; flex-wrap: wrap; }
+  .stat-online { color: #22c55e; } .stat-offline { color: #ef4444; } .stat-novos { color: #3b82f6; } .stat-docs { color: #a855f7; }
+  .status-servidor { font-size: 12px; padding: 4px 10px; border-radius: 6px; background: #334155; color: #94a3b8; }
+  .status-servidor.ok { background: #14532d; color: #86efac; }
+  .status-servidor.err { background: #7f1d1d; color: #fecaca; }
+  .toggle-som { background: #334155; border: none; color: #e2e8f0; padding: 4px 10px; border-radius: 6px; cursor: pointer; font-size: 12px; }
+  .toggle-som.ativo { background: #16a34a; color: white; }
+  .btn-sair { background: #7f1d1d; border: none; color: #e2e8f0; padding: 4px 10px; border-radius: 6px; cursor: pointer; font-size: 12px; }
+  .aviso-banner { background: #7c2d12; border: 1px solid #ea580c; color: #fed7aa; padding: 10px 16px; border-radius: 8px; margin-bottom: 16px; font-size: 13px; display: none; align-items: center; gap: 10px; }
+  .aviso-banner.ativo { display: flex; }
+  .aviso-banner.urgente { background: #7f1d1d; border-color: #dc2626; color: #fecaca; animation: pulse-aviso 1.5s infinite; }
+  @keyframes pulse-aviso { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
+  .barra-acoes { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; align-items: center; }
+  .btn-acao { background: #334155; border: none; color: #e2e8f0; padding: 8px 14px; border-radius: 6px; cursor: pointer; font-size: 12px; position: relative; }
+  .btn-acao.roxo { background: #6d28d9; }
+  .btn-acao.vermelho { background: #7f1d1d; }
+  .btn-acao.laranja { background: #7c2d12; }
+  .btn-acao.amarelo { background: #b45309; }
+  .btn-acao.verde { background: #15803d; }
+  .badge-msg { position: absolute; top: -6px; right: -6px; background: #ef4444; color: white; font-size: 10px; padding: 2px 6px; border-radius: 10px; font-weight: bold; }
+
+  /* ===== ABAS ===== */
+  .abas { display: flex; gap: 4px; margin-bottom: 20px; border-bottom: 1px solid #334155; }
+  .aba { background: transparent; border: none; color: #94a3b8; padding: 12px 20px; cursor: pointer; font-size: 14px; border-bottom: 2px solid transparent; }
+  .aba.ativo { color: #3b82f6; border-bottom-color: #3b82f6; font-weight: 600; }
+  .aba-painel { display: none; }
+  .aba-painel.ativo { display: block; }
+
+  /* ===== DIRETORIA SECTION ===== */
+  .diretoria-bloco { background: #1e293b; border: 1px solid #334155; border-radius: 12px; margin-bottom: 20px; overflow: hidden; }
+  .diretoria-header { display: flex; justify-content: space-between; align-items: center; padding: 14px 20px; background: #0f172a; border-bottom: 1px solid #334155; cursor: pointer; user-select: none; }
+  .diretoria-header:hover { background: #1a2540; }
+  .diretoria-header .nome { font-size: 15px; font-weight: 600; color: #f1f5f9; }
+  .diretoria-header .diretor { font-size: 12px; color: #94a3b8; margin-top: 2px; }
+  .diretoria-header .contadores { display: flex; gap: 12px; font-size: 12px; }
+  .diretoria-header .badge-reg { background: #334155; color: #cbd5e1; padding: 3px 10px; border-radius: 6px; font-size: 11px; }
+  .diretoria-body { padding: 16px 20px; display: none; }
+  .diretoria-body.aberto { display: block; }
+  .grid-ubs { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; }
+  .ubs-card { background: #0f172a; border: 2px solid #334155; border-radius: 8px; padding: 10px 8px; text-align: center; position: relative; user-select: none; }
+  .ubs-card.online { border-color: #16a34a; }
+  .ubs-card.offline { border-color: #dc2626; opacity: 0.5; }
+  .ubs-card.piscando { animation: piscar 1s infinite; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.5); }
+  @keyframes piscar { 0%, 100% { background: #0f172a; } 50% { background: #1e3a8a; } }
+  .ubs-nome { font-size: 11px; font-weight: 600; margin-bottom: 5px; color: #f1f5f9; line-height: 1.3; }
+  .ubs-status { font-size: 9px; display: flex; align-items: center; justify-content: center; gap: 4px; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+  .dot.online { background: #22c55e; box-shadow: 0 0 6px #22c55e; }
+  .dot.offline { background: #ef4444; }
+  .vazio-msg { text-align: center; color: #64748b; font-size: 12px; padding: 20px; }
+
+  /* ===== MENSAGENS ===== */
+  .msg-item { background: #0f172a; border: 1px solid #334155; border-left: 4px solid #64748b; border-radius: 8px; padding: 12px 14px; margin-bottom: 10px; cursor: pointer; transition: all 0.2s; }
+  .msg-item:hover { background: #1a2540; border-color: #475569; }
+  .msg-item.nao-lida { border-left-color: #ef4444; background: #1a1720; }
+  .msg-item.urgente { border-left-color: #dc2626; }
+  .msg-item.alerta { border-left-color: #ea580c; }
+  .msg-item.info { border-left-color: #3b82f6; }
+  .msg-item .header { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; margin-bottom: 6px; }
+  .msg-item .assunto { font-size: 14px; font-weight: 600; color: #f1f5f9; }
+  .msg-item .data { font-size: 11px; color: #64748b; white-space: nowrap; }
+  .msg-item .remetente { font-size: 12px; color: #94a3b8; margin-bottom: 4px; }
+  .msg-item .preview { font-size: 12px; color: #64748b; line-height: 1.5; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  .msg-item .prioridade { display: inline-block; font-size: 9px; padding: 2px 6px; border-radius: 4px; margin-left: 6px; font-weight: bold; text-transform: uppercase; }
+  .msg-item .prioridade.info { background: #1e3a8a; color: #93c5fd; }
+  .msg-item .prioridade.alerta { background: #7c2d12; color: #fdba74; }
+  .msg-item .prioridade.urgente { background: #7f1d1d; color: #fecaca; }
+
+  .msg-detalhe { background: #0f172a; border-radius: 8px; padding: 20px; }
+  .msg-detalhe .topo { border-bottom: 1px solid #334155; padding-bottom: 14px; margin-bottom: 16px; }
+  .msg-detalhe .topo h4 { font-size: 18px; color: #f1f5f9; margin-bottom: 8px; }
+  .msg-detalhe .meta { font-size: 12px; color: #94a3b8; line-height: 1.7; }
+  .msg-detalhe .meta b { color: #cbd5e1; }
+  .msg-detalhe .corpo { font-size: 14px; color: #e2e8f0; line-height: 1.7; white-space: pre-wrap; }
+  .msg-detalhe .anexos { margin-top: 16px; padding-top: 14px; border-top: 1px solid #334155; }
+  .msg-detalhe .anexos h5 { font-size: 12px; color: #94a3b8; margin-bottom: 8px; }
+  .msg-detalhe .anexo-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: #1e293b; border-radius: 6px; margin-bottom: 6px; font-size: 12px; }
+  .msg-detalhe .anexo-item a { color: #3b82f6; text-decoration: none; padding: 4px 10px; background: #1e3a8a; border-radius: 4px; font-size: 11px; }
+  .btn-voltar { background: #334155; border: none; color: #e2e8f0; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; margin-bottom: 16px; }
+
+  .form-msg { max-width: 700px; }
+  .form-msg label { font-size: 12px; color: #94a3b8; display: block; margin-bottom: 4px; margin-top: 14px; }
+  .form-msg select, .form-msg input, .form-msg textarea { background: #0f172a; border: 1px solid #334155; color: #e2e8f0; padding: 10px 12px; border-radius: 6px; font-size: 13px; width: 100%; font-family: inherit; }
+  .form-msg textarea { min-height: 140px; resize: vertical; }
+  .form-msg .btn-enviar { background: #6d28d9; border: none; color: white; padding: 12px 24px; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 600; margin-top: 20px; width: 100%; }
+  .form-msg .btn-enviar:hover { background: #5b21b6; }
+  .form-msg .btn-enviar:disabled { background: #475569; cursor: not-allowed; }
+  .aviso-form { background: #14532d; border: 1px solid #16a34a; color: #bbf7d0; padding: 10px 14px; border-radius: 8px; margin-top: 12px; font-size: 12px; display: none; }
+  .aviso-form.ativo { display: block; }
+  .aviso-form.erro { background: #7f1d1d; border-color: #dc2626; color: #fecaca; }
+  .doc-vazio { color: #64748b; font-size: 12px; text-align: center; padding: 24px; }
+  .secao { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 20px; }
 </style>
 </head>
 <body>
 <div class="container">
   <div class="topbar">
-    <div>
-      <h1 id="titulo-apoio">🛡️ Órgão de Apoio</h1>
-      <h2 id="usuario-info">Carregando...</h2>
+    <div class="info">
+      <div class="titulo" id="titulo">🛡️ Órgão de Apoio</div>
+      <div class="subtitulo" id="subtitulo">Carregando...</div>
     </div>
-    <button class="btn vermelho" onclick="sair()">🚪 Sair</button>
+    <div class="stats">
+      <span class="stat-online">🟢 <b id="stat-online">0</b> online</span>
+      <span class="stat-offline">🔴 <b id="stat-offline">0</b> offline</span>
+      <span class="status-servidor" id="status-servidor">⚪ Conectando...</span>
+      <button class="toggle-som" id="toggle-som" onclick="toggleSom()">🔇 Som OFF</button>
+      <button class="btn-sair" onclick="sair()">🚪 Sair</button>
+    </div>
   </div>
 
-  <div class="provisorio">
-    ⚠️ <b>Etapa 1 concluída.</b> Este painel será expandido na Etapa 2 com:
-    comunicação com a Presidência e Diretorias, recebimento de solicitações, envio de documentos.
+  <div class="aviso-banner" id="aviso-banner"><span>📢</span><span id="aviso-texto">—</span></div>
+
+  <div class="abas">
+    <button class="aba ativo" data-aba="msgs" onclick="mudarAba('msgs')">
+      📨 Mensagens
+      <span class="badge-msg" id="badge-aba-msgs" style="display:none;">0</span>
+    </button>
+    <button class="aba" data-aba="monitor" onclick="mudarAba('monitor')">📊 Monitoramento (somente leitura)</button>
   </div>
 
-  <div class="card">
-    <span class="icone">🛡️</span>
-    <h3 id="nome-orgao">Bem-vindo(a)</h3>
-    <p>Órgão de apoio à Presidência</p>
+  <!-- ABA MENSAGENS -->
+  <div class="aba-painel ativo" id="painel-msgs">
+    <div class="barra-acoes">
+      <button class="btn-acao" id="tab-recebidas-btn" onclick="mudarTabMsgs('recebidas')">📥 Recebidas</button>
+      <button class="btn-acao" id="tab-enviadas-btn" onclick="mudarTabMsgs('enviadas')">📤 Enviadas</button>
+      <button class="btn-acao roxo" onclick="mudarTabMsgs('compor')">✏️ Compor nova mensagem</button>
+    </div>
+    <div class="secao">
+      <div id="msgs-recebidas"></div>
+      <div id="msgs-enviadas" style="display:none;"></div>
+      <div id="msgs-compor" style="display:none;">
+        <div class="form-msg">
+          <label>Para</label>
+          <select id="msg-destino"></select>
+          <label>Assunto</label>
+          <input type="text" id="msg-assunto" placeholder="Assunto da mensagem">
+          <label>Prioridade</label>
+          <select id="msg-prioridade">
+            <option value="info">ℹ️ Informativo</option>
+            <option value="alerta">⚠️ Alerta</option>
+            <option value="urgente">🚨 Urgente</option>
+          </select>
+          <label>Mensagem</label>
+          <textarea id="msg-corpo" placeholder="Escreva sua mensagem..."></textarea>
+          <label>Anexos (opcional, múltiplos, até 10 MB cada)</label>
+          <input type="file" id="msg-anexos" multiple accept="*/*">
+          <button class="btn-enviar" id="btn-enviar-msg" onclick="enviarMensagem()">📤 Enviar mensagem</button>
+          <div class="aviso-form" id="aviso-msg"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ABA MONITORAMENTO -->
+  <div class="aba-painel" id="painel-monitor">
+    <div class="secao" style="margin-bottom:16px;padding:14px 20px;">
+      <div style="font-size:13px;color:#94a3b8;">
+        👁️ <b style="color:#cbd5e1;">Somente leitura.</b> Como Órgão de Apoio, você visualiza o estado das unidades,
+        mas não pode enviar mensagens ou documentos diretamente para elas. Utilize a Presidência como intermediária.
+      </div>
+    </div>
+    <div id="lista-diretorias"></div>
   </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
 <script>
-function carregarInfo() {
-  const dados = JSON.parse(localStorage.getItem('dados_usuario') || '{}');
-  document.getElementById('titulo-apoio').textContent = '🛡️ ' + (dados.nome || 'Órgão de Apoio');
-  document.getElementById('nome-orgao').textContent = dados.nome || 'Órgão de Apoio';
-  document.getElementById('usuario-info').textContent = 'Responsável: ' + (dados.responsavel || '—');
+const SUPABASE_URL = 'https://gtmgqvoesezshgsthxhr.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_9v7pBfemMd0MR8E55Tkt4g_oknrNWrc';
+const BUCKET = 'ubs-documentos';
+const LIMITE_MB = 10;
+
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+let ubsMap = {};
+let ws = null;
+let estado = null;
+let somLigado = false;
+let audioCtx = null;
+let mensagensRecebidas = [];
+let mensagensEnviadas = [];
+let msgsNaoLidas = 0;
+let diretoriasAbertas = {};
+let abaAtual = 'msgs';
+let tabMsgsAtual = 'recebidas';
+
+// ============ UTIL ============
+function tocarBip() {
+  if (!somLigado) return;
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    o.type = 'sine';
+    o.frequency.value = 880;
+    g.gain.setValueAtTime(0.15, audioCtx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.25);
+    o.connect(g); g.connect(audioCtx.destination);
+    o.start(); o.stop(audioCtx.currentTime + 0.25);
+  } catch (e) {}
+}
+
+function toggleSom() {
+  somLigado = !somLigado;
+  const b = document.getElementById('toggle-som');
+  b.textContent = somLigado ? '🔊 Som ON' : '🔇 Som OFF';
+  b.className = 'toggle-som' + (somLigado ? ' ativo' : '');
+  if (somLigado) tocarBip();
 }
 
 function sair() {
@@ -58,7 +232,418 @@ function sair() {
   location.href = '/';
 }
 
-carregarInfo();
+function setStatus(t, txt) {
+  const el = document.getElementById('status-servidor');
+  el.className = 'status-servidor ' + t;
+  el.textContent = txt;
+}
+
+function formatarData(iso) {
+  const d = new Date(iso);
+  const hoje = new Date();
+  const ontem = new Date(hoje); ontem.setDate(ontem.getDate() - 1);
+  if (d.toDateString() === hoje.toDateString()) return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  if (d.toDateString() === ontem.toDateString()) return 'Ontem ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  return d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+}
+
+// ============ ABAS ============
+function mudarAba(aba) {
+  abaAtual = aba;
+  document.querySelectorAll('.aba').forEach(a => a.classList.toggle('ativo', a.dataset.aba === aba));
+  document.querySelectorAll('.aba-painel').forEach(p => p.classList.remove('ativo'));
+  document.getElementById('painel-' + aba).classList.add('ativo');
+  if (aba === 'monitor' && estado) renderListaDiretorias();
+}
+
+function mudarTabMsgs(tab) {
+  tabMsgsAtual = tab;
+  document.getElementById('msgs-recebidas').style.display = tab === 'recebidas' ? 'block' : 'none';
+  document.getElementById('msgs-enviadas').style.display = tab === 'enviadas' ? 'block' : 'none';
+  document.getElementById('msgs-compor').style.display = tab === 'compor' ? 'block' : 'none';
+
+  document.getElementById('tab-recebidas-btn').className = 'btn-acao' + (tab === 'recebidas' ? ' amarelo' : '');
+  document.getElementById('tab-enviadas-btn').className = 'btn-acao' + (tab === 'enviadas' ? ' amarelo' : '');
+
+  if (tab === 'compor') {
+    document.getElementById('msg-assunto').value = '';
+    document.getElementById('msg-corpo').value = '';
+    document.getElementById('msg-anexos').value = '';
+    document.getElementById('msg-destino').value = '';
+    document.getElementById('msg-prioridade').value = 'info';
+    document.getElementById('aviso-msg').classList.remove('ativo');
+  }
+}
+
+// ============ INICIALIZAÇÃO ============
+async function inicializar() {
+  const dados = JSON.parse(localStorage.getItem('dados_usuario') || '{}');
+  document.getElementById('titulo').textContent = '🛡️ ' + (dados.nome || 'Órgão de Apoio');
+  document.getElementById('subtitulo').textContent = 'Responsável: ' + (dados.responsavel || '—');
+
+  // Busca estado (todas as diretorias) — órgãos de apoio têm acesso de leitura
+  try {
+    const res = await fetch('/api/admin/estado');
+    // Como /api/admin/estado requer presidência, para o apoio usamos /api/unidades
+    // Mas precisamos do estado completo, então usamos as rotas disponíveis
+    const res2 = await fetch('/api/unidades');
+    const data2 = await res2.json();
+    if (data2.ok) {
+      // Agrupa por diretoria
+      const diretorias = {};
+      data2.unidades.forEach(u => {
+        if (!diretorias[u.diretoria_id]) {
+          diretorias[u.diretoria_id] = { id: u.diretoria_id, nome: u.diretoria, diretor: null, unidades: [] };
+        }
+        diretorias[u.diretoria_id].unidades.push(u);
+      });
+      estado = { diretorias: Object.values(diretorias) };
+    }
+  } catch (e) {
+    console.error(e);
+    estado = { diretorias: [] };
+  }
+
+  await carregarDestinatarios();
+  await carregarMensagens();
+
+  conectarWS();
+}
+
+// ============ WEBSOCKET ============
+function conectarWS() {
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  ws = new WebSocket(`${proto}//${location.host}`);
+  ws.onopen = () => {
+    setStatus('ok', '🟢 Servidor conectado');
+    const dados = JSON.parse(localStorage.getItem('dados_usuario') || '{}');
+    ws.send(JSON.stringify({ type: 'ola_apoio', usuario: dados.id }));
+  };
+  ws.onclose = () => {
+    setStatus('err', '🔴 Desconectado');
+    setTimeout(conectarWS, 3000);
+  };
+  ws.onerror = () => setStatus('err', '🔴 Erro');
+  ws.onmessage = (ev) => handleMsg(JSON.parse(ev.data));
+}
+
+function handleMsg(msg) {
+  switch (msg.type) {
+    case 'estado_inicial':
+      (msg.ubs || []).forEach(u => { ubsMap[u.id] = u; });
+      if (abaAtual === 'monitor' && estado) renderListaDiretorias();
+      break;
+    case 'ubs_registrada':
+      ubsMap[msg.ubs.id] = msg.ubs;
+      if (abaAtual === 'monitor') renderListaDiretorias();
+      break;
+    case 'ubs_online':
+      if (ubsMap[msg.ubs_id]) { ubsMap[msg.ubs_id].online = true; if (abaAtual === 'monitor') renderListaDiretorias(); }
+      break;
+    case 'ubs_offline':
+      if (ubsMap[msg.ubs_id]) { ubsMap[msg.ubs_id].online = false; if (abaAtual === 'monitor') renderListaDiretorias(); }
+      break;
+    case 'novo_dado':
+      if (ubsMap[msg.ubs_id]) {
+        const ubs = ubsMap[msg.ubs_id];
+        ubs.novosDados = (ubs.novosDados || 0) + 1;
+        if (abaAtual === 'monitor') renderListaDiretorias();
+      }
+      break;
+    case 'mensagem_recebida':
+      mensagensRecebidas.unshift(msg.mensagem);
+      msgsNaoLidas++;
+      atualizarBadgeMsgs();
+      renderRecebidas();
+      tocarBip();
+      mostrarToast(`📨 Nova mensagem de ${msg.mensagem.de_nome}`);
+      break;
+    case 'mensagem_enviada':
+      mensagensEnviadas.unshift(msg.mensagem);
+      renderEnviadas();
+      break;
+    case 'erro_mensagem':
+      mostrarAvisoForm('erro', msg.texto);
+      break;
+    case 'aviso':
+    case 'aviso_enviado':
+      mostrarAviso(msg.aviso);
+      tocarBip();
+      break;
+  }
+}
+
+// ============ LISTA DIRETORIAS (monitoramento) ============
+function renderListaDiretorias() {
+  if (!estado) return;
+  const container = document.getElementById('lista-diretorias');
+  container.innerHTML = '';
+
+  estado.diretorias.forEach(dir => {
+    const bloco = document.createElement('div');
+    bloco.className = 'diretoria-bloco';
+
+    const ids = dir.unidades.map(u => u.id);
+    const ativos = Object.values(ubsMap).filter(u => ids.includes(u.id));
+    const online = ativos.filter(u => u.online).length;
+    const offline = ids.length - online;
+    const novos = ativos.reduce((a, u) => a + (u.novosDados || 0), 0);
+    const aberto = diretoriasAbertas[dir.id] ? 'aberto' : '';
+
+    bloco.innerHTML = `
+      <div class="diretoria-header" onclick="toggleDiretoria('${dir.id}')">
+        <div>
+          <div class="nome">📁 ${dir.nome}</div>
+          <div class="diretor">${dir.unidades.length} unidade(s)</div>
+        </div>
+        <div class="contadores">
+          <span class="stat-online">🟢 ${online}</span>
+          <span class="stat-offline">🔴 ${offline}</span>
+          ${novos > 0 ? `<span class="stat-novos">🔵 ${novos}</span>` : ''}
+          <span class="badge-reg">${aberto ? '▼' : '▶'}</span>
+        </div>
+      </div>
+      <div class="diretoria-body ${aberto}">
+        <div class="grid-ubs" id="grid-${dir.id}"></div>
+      </div>
+    `;
+    container.appendChild(bloco);
+
+    const grid = bloco.querySelector('#grid-' + dir.id);
+    if (dir.unidades.length === 0) {
+      grid.innerHTML = '<div class="vazio-msg">Nenhuma unidade cadastrada nesta diretoria.</div>';
+    } else {
+      dir.unidades.forEach(mu => {
+        const u = ubsMap[mu.id] || { id: mu.id, nome: mu.nome, regiao: mu.regiao, online: false };
+        const card = document.createElement('div');
+        card.className = `ubs-card ${u.online ? 'online' : 'offline'}`;
+        card.innerHTML = `
+          <div class="ubs-nome">${u.nome}</div>
+          <div class="ubs-status">
+            <span class="dot ${u.online ? 'online' : 'offline'}"></span>
+            <span>${u.online ? 'Online' : 'Offline'}</span>
+          </div>`;
+        grid.appendChild(card);
+      });
+    }
+  });
+
+  const ativos = Object.values(ubsMap);
+  document.getElementById('stat-online').textContent = ativos.filter(u => u.online).length;
+  const total = estado.diretorias.reduce((a, d) => a + d.unidades.length, 0);
+  document.getElementById('stat-offline').textContent = total - ativos.filter(u => u.online).length;
+}
+
+function toggleDiretoria(id) {
+  diretoriasAbertas[id] = !diretoriasAbertas[id];
+  renderListaDiretorias();
+}
+
+// ============ MENSAGENS ============
+async function carregarDestinatarios() {
+  try {
+    const res = await fetch('/api/mensagens/destinatarios');
+    const data = await res.json();
+    if (data.ok) {
+      const sel = document.getElementById('msg-destino');
+      sel.innerHTML = '<option value="">— Selecione o destinatário —</option>';
+      (data.destinos || []).forEach(d => {
+        const opt = document.createElement('option');
+        opt.value = d.tipo + '|' + d.id;
+        opt.textContent = d.nome;
+        sel.appendChild(opt);
+      });
+    }
+  } catch (e) { console.error(e); }
+}
+
+async function carregarMensagens() {
+  try {
+    const res = await fetch('/api/mensagens');
+    const data = await res.json();
+    if (data.ok) {
+      mensagensRecebidas = data.recebidas || [];
+      mensagensEnviadas = data.enviadas || [];
+      msgsNaoLidas = mensagensRecebidas.filter(m => !m.lida).length;
+      atualizarBadgeMsgs();
+      renderRecebidas();
+      renderEnviadas();
+    }
+  } catch (e) { console.error(e); }
+}
+
+function atualizarBadgeMsgs() {
+  const badge = document.getElementById('badge-aba-msgs');
+  if (msgsNaoLidas > 0) {
+    badge.style.display = 'inline-block';
+    badge.textContent = msgsNaoLidas;
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
+function renderRecebidas() {
+  const p = document.getElementById('msgs-recebidas');
+  if (mensagensRecebidas.length === 0) { p.innerHTML = '<div class="doc-vazio">Nenhuma mensagem recebida.</div>'; return; }
+  p.innerHTML = '';
+  mensagensRecebidas.forEach(m => {
+    const div = document.createElement('div');
+    div.className = `msg-item ${m.prioridade} ${!m.lida ? 'nao-lida' : ''}`;
+    div.onclick = () => abrirDetalheMsg(m, 'recebida');
+    div.innerHTML = `
+      <div class="header">
+        <div class="assunto">${m.assunto} <span class="prioridade ${m.prioridade}">${m.prioridade}</span></div>
+        <div class="data">${formatarData(m.ts)}</div>
+      </div>
+      <div class="remetente">De: <b>${m.de_nome}</b></div>
+      <div class="preview">${m.corpo}</div>`;
+    p.appendChild(div);
+  });
+}
+
+function renderEnviadas() {
+  const p = document.getElementById('msgs-enviadas');
+  if (mensagensEnviadas.length === 0) { p.innerHTML = '<div class="doc-vazio">Nenhuma mensagem enviada.</div>'; return; }
+  p.innerHTML = '';
+  mensagensEnviadas.forEach(m => {
+    const div = document.createElement('div');
+    div.className = `msg-item ${m.prioridade}`;
+    div.onclick = () => abrirDetalheMsg(m, 'enviada');
+    div.innerHTML = `
+      <div class="header">
+        <div class="assunto">${m.assunto} <span class="prioridade ${m.prioridade}">${m.prioridade}</span></div>
+        <div class="data">${formatarData(m.ts)}</div>
+      </div>
+      <div class="remetente">Para: <b>${m.para_nome}</b></div>
+      <div class="preview">${m.corpo}</div>`;
+    p.appendChild(div);
+  });
+}
+
+function abrirDetalheMsg(m, tipo) {
+  if (tipo === 'recebida' && !m.lida) {
+    m.lida = true;
+    msgsNaoLidas = Math.max(0, msgsNaoLidas - 1);
+    atualizarBadgeMsgs();
+    renderRecebidas();
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: 'marcar_mensagem_lida', mensagem_id: m.id }));
+    }
+  }
+
+  const container = document.getElementById(tipo === 'recebida' ? 'msgs-recebidas' : 'msgs-enviadas');
+  const anexosHTML = (m.anexos && m.anexos.length > 0) ? `
+    <div class="anexos">
+      <h5>📎 Anexos (${m.anexos.length})</h5>
+      ${m.anexos.map(a => `
+        <div class="anexo-item">
+          <span>📄 ${a.nome} <span style="color:#64748b;">(${(a.tamanho/1024).toFixed(0)} KB)</span></span>
+          <a href="${a.url}" target="_blank" rel="noopener">Baixar</a>
+        </div>`).join('')}
+    </div>` : '';
+
+  container.innerHTML = `
+    <button class="btn-voltar" onclick="mudarTabMsgs('${tipo === 'recebida' ? 'recebidas' : 'enviadas'}')">← Voltar</button>
+    <div class="msg-detalhe">
+      <div class="topo">
+        <h4>${m.assunto}</h4>
+        <div class="meta">
+          <div><b>De:</b> ${m.de_nome}</div>
+          <div><b>Para:</b> ${m.para_nome}</div>
+          <div><b>Data:</b> ${new Date(m.ts).toLocaleString('pt-BR')}</div>
+          <div><b>Prioridade:</b> <span class="prioridade ${m.prioridade}">${m.prioridade}</span></div>
+        </div>
+      </div>
+      <div class="corpo">${m.corpo}</div>
+      ${anexosHTML}
+    </div>`;
+}
+
+async function enviarMensagem() {
+  const sel = document.getElementById('msg-destino');
+  const assunto = document.getElementById('msg-assunto').value.trim();
+  const prioridade = document.getElementById('msg-prioridade').value;
+  const corpo = document.getElementById('msg-corpo').value.trim();
+  const inputAnexos = document.getElementById('msg-anexos');
+  const btn = document.getElementById('btn-enviar-msg');
+
+  if (!sel.value) return mostrarAvisoForm('erro', '❌ Selecione um destinatário.');
+  if (!assunto) return mostrarAvisoForm('erro', '❌ Preencha o assunto.');
+  if (!corpo) return mostrarAvisoForm('erro', '❌ Escreva a mensagem.');
+
+  const [destino_tipo, destino_id] = sel.value.split('|');
+  const arquivos = Array.from(inputAnexos.files);
+  for (const f of arquivos) {
+    if (f.size > LIMITE_MB * 1024 * 1024) {
+      return mostrarAvisoForm('erro', `❌ "${f.name}" excede ${LIMITE_MB}MB.`);
+    }
+  }
+
+  btn.disabled = true;
+  btn.textContent = arquivos.length > 0 ? `Enviando ${arquivos.length} anexo(s)...` : 'Enviando...';
+
+  const anexos = [];
+  for (const f of arquivos) {
+    const nome = `mensagens/${Date.now()}-${f.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+    try {
+      const { error } = await supabaseClient.storage.from(BUCKET).upload(nome, f, { cacheControl: '3600', upsert: false });
+      if (error) throw error;
+      const { data: urlData } = supabaseClient.storage.from(BUCKET).getPublicUrl(nome);
+      anexos.push({ nome: f.name, tamanho: f.size, url: urlData.publicUrl, path: nome });
+    } catch (e) {
+      btn.disabled = false;
+      btn.textContent = '📤 Enviar mensagem';
+      return mostrarAvisoForm('erro', `❌ Falha em "${f.name}": ${e.message}`);
+    }
+  }
+
+  if (!ws || ws.readyState !== WebSocket.OPEN) {
+    btn.disabled = false;
+    btn.textContent = '📤 Enviar mensagem';
+    return mostrarAvisoForm('erro', '❌ WebSocket desconectado.');
+  }
+
+  ws.send(JSON.stringify({
+    type: 'enviar_mensagem',
+    destino_tipo, destino_id, assunto, prioridade, corpo, anexos
+  }));
+
+  btn.disabled = false;
+  btn.textContent = '📤 Enviar mensagem';
+  mostrarAvisoForm('ok', '✅ Mensagem enviada!');
+  setTimeout(() => mudarTabMsgs('enviadas'), 1200);
+}
+
+function mostrarAvisoForm(tipo, msg) {
+  const a = document.getElementById('aviso-msg');
+  a.textContent = msg;
+  a.className = 'aviso-form ativo' + (tipo === 'erro' ? ' erro' : '');
+  if (tipo === 'ok') setTimeout(() => a.classList.remove('ativo'), 3000);
+}
+
+// ============ AVISOS ============
+function mostrarAviso(aviso) {
+  const b = document.getElementById('aviso-banner');
+  const t = document.getElementById('aviso-texto');
+  t.textContent = `[${aviso.prioridade.toUpperCase()}] ${aviso.mensagem}`;
+  b.className = 'aviso-banner ativo' + (aviso.prioridade === 'urgente' ? ' urgente' : '');
+  if (aviso.prioridade !== 'urgente') setTimeout(() => b.classList.remove('ativo'), 12000);
+}
+
+function mostrarToast(msg) {
+  const t = document.createElement('div');
+  t.textContent = msg;
+  t.style.cssText = 'position:fixed;bottom:20px;right:20px;background:#6d28d9;color:white;padding:14px 20px;border-radius:10px;font-size:13px;font-weight:600;box-shadow:0 4px 20px rgba(0,0,0,0.5);z-index:9999;animation:slideIn 0.3s ease;';
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 4000);
+}
+
+const style = document.createElement('style');
+style.textContent = '@keyframes slideIn { from { transform: translateX(400px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }';
+document.head.appendChild(style);
+
+// ============ INICIALIZA ============
+inicializar();
 
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/sw.js').catch(() => {});
