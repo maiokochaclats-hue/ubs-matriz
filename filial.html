@@ -54,6 +54,8 @@
   .fila-info { font-size: 11px; color: #f59e0b; margin-top: 8px; display: none; padding: 8px 12px; background: #78350f; border-radius: 6px; }
   .fila-info.ativo { display: block; }
   .loading { text-align: center; padding: 40px; color: #64748b; font-size: 13px; }
+  .novo-badge { display: inline-block; background: #a855f7; color: white; font-size: 9px; padding: 2px 6px; border-radius: 6px; margin-left: 6px; font-weight: bold; animation: pulse-novo 2s infinite; }
+  @keyframes pulse-novo { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
 </style>
 </head>
 <body>
@@ -90,8 +92,8 @@
   <div class="grid-setores" id="grid-setores" style="display:none;"></div>
 
   <div class="secao-docs" id="secao-docs" style="display:none;">
-    <h3>📁 Documentos recebidos da Diretoria</h3>
-    <div class="sub">Arquivos enviados diretamente para esta unidade</div>
+    <h3>📁 Documentos recebidos <span id="badge-docs-novos" class="novo-badge" style="display:none;">0</span></h3>
+    <div class="sub">Arquivos enviados pela Diretoria/Presidência</div>
     <div id="lista-docs">
       <div class="doc-vazio">Nenhum documento recebido ainda.</div>
     </div>
@@ -122,6 +124,7 @@ let ws = null;
 let hb = null;
 let listaUSF = [];
 let documentosRecebidos = [];
+let docsNaoLidos = 0;
 let autoRegistroFeito = false;
 let filaDocumentos = [];
 
@@ -196,6 +199,61 @@ function tentarEnviarFila() {
   if (enviados > 0) log(`📎 ${enviados} documento(s) enviado(s)`, 'ok');
 }
 
+// ============ DOCUMENTOS RECEBIDOS ============
+function adicionarDocumentos(docs) {
+  let novos = 0;
+  docs.forEach(d => {
+    // Evita duplicatas pela URL
+    if (!documentosRecebidos.some(x => x.url === d.url)) {
+      documentosRecebidos.unshift(d);
+      novos++;
+    }
+  });
+  if (novos > 0) {
+    docsNaoLidos += novos;
+    atualizarBadgeDocs();
+  }
+  renderDocumentos();
+  // Garante que a seção está visível
+  document.getElementById('secao-docs').style.display = 'block';
+}
+
+function atualizarBadgeDocs() {
+  const badge = document.getElementById('badge-docs-novos');
+  if (!badge) return;
+  if (docsNaoLidos > 0) {
+    badge.style.display = 'inline-block';
+    badge.textContent = docsNaoLidos;
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
+function renderDocumentos() {
+  const lista = document.getElementById('lista-docs');
+  if (documentosRecebidos.length === 0) {
+    lista.innerHTML = '<div class="doc-vazio">Nenhum documento recebido ainda.</div>';
+    return;
+  }
+  lista.innerHTML = '';
+  documentosRecebidos.slice(0, 50).forEach(d => {
+    const item = document.createElement('div');
+    item.className = 'doc-item';
+    const tamanho = d.tamanho ? ` • ${(d.tamanho/1024).toFixed(0)} KB` : '';
+    const data = d.ts ? new Date(d.ts).toLocaleString('pt-BR') : '';
+    const origemTxt = d.origem === 'matriz'
+      ? '📤 Da Diretoria/Presidência'
+      : (d.setor_nome ? `📋 De ${d.setor_nome}` : '');
+    item.innerHTML = `
+      <div class="info">
+        <div class="nome">📄 ${d.nome}</div>
+        <div class="meta">${origemTxt} ${data}${tamanho}</div>
+      </div>
+      <a href="${d.url}" target="_blank" rel="noopener">Baixar</a>`;
+    lista.appendChild(item);
+  });
+}
+
 // ============ CARREGA USFs ============
 async function carregarUSFs() {
   const sel = document.getElementById('select-usf');
@@ -204,7 +262,6 @@ async function carregarUSFs() {
     const data = await res.json();
     listaUSF = data.usfs || [];
 
-    // Agrupa por região/diretoria
     const regioes = {};
     listaUSF.forEach(u => {
       const r = u.regiao || 'Outros';
@@ -228,7 +285,6 @@ async function carregarUSFs() {
     document.getElementById('loading-box').style.display = 'none';
     document.getElementById('form-registro').style.display = 'block';
 
-    // Auto-registro via URL
     const params = new URLSearchParams(location.search);
     const usfParam = params.get('usf');
     if (usfParam && listaUSF.find(u => u.id === usfParam)) {
@@ -259,7 +315,6 @@ async function registrar() {
   ubsId = usf.id;
   ubsNome = usf.nome;
   ubsRegiao = usf.regiao;
-  // Determina diretoria a partir da região (heurística simples)
   ubsDiretoria = usf.regiao || 'Diretoria';
 
   const campo = document.getElementById('input-servidor').value.trim().replace(/\/$/, '');
@@ -298,6 +353,15 @@ async function registrar() {
 
     log(`✅ Conectada como ${ubsNome}`, 'ok');
     if (data.ubs?.diretoria_nome) log(`📁 Diretoria: ${data.ubs.diretoria_nome}`, 'info');
+
+    // Se a resposta já trouxer documentos históricos, mostra
+    if (data.ubs?.documentos && Array.isArray(data.ubs.documentos)) {
+      const docsDaMatriz = data.ubs.documentos.filter(d => d.origem === 'matriz');
+      if (docsDaMatriz.length > 0) {
+        adicionarDocumentos(docsDaMatriz);
+        log(`📁 ${docsDaMatriz.length} documento(s) histórico(s) carregado(s)`, 'ok');
+      }
+    }
 
     carregarFila();
     renderSetores();
@@ -422,45 +486,50 @@ function conectarWS() {
   ws.onmessage = (ev) => {
     try {
       const m = JSON.parse(ev.data);
+
+      // ===== AVISO =====
       if (m.type === 'aviso') {
         document.getElementById('aviso-box').classList.add('ativo');
         document.getElementById('aviso-texto').textContent =
           `[${m.aviso.prioridade.toUpperCase()}] ${m.aviso.mensagem}`;
         log(`📢 Aviso: ${m.aviso.mensagem}`, 'info');
       }
-      if (m.type === 'documento_recebido' && m.origem === 'matriz' && m.ubs_id === ubsId) {
-        adicionarDocumentos(m.documentos);
-        log(`📁 ${m.documentos.length} documento(s) recebido(s)`, 'ok');
+
+      // ===== DOCUMENTO RECEBIDO (CORRIGIDO) =====
+      if (m.type === 'documento_recebido') {
+        console.log('📥 documento_recebido recebido:', m);
+
+        // Aceita qualquer origem (matriz, diretoria, presidência)
+        // Só exige que seja para esta USF
+        const ehParaMim = !m.ubs_id || m.ubs_id === ubsId;
+
+        if (ehParaMim) {
+          const docs = m.documentos || [];
+          if (docs.length > 0) {
+            // Normaliza o campo origem para 'matriz' se vier como 'diretoria' ou 'presidencia'
+            const docsNormalizados = docs.map(d => ({
+              ...d,
+              origem: 'matriz', // sempre trata como "vindo de cima"
+              setor_id: m.setor_id,
+              setor_nome: m.setor_nome,
+              ts: d.ts || new Date().toISOString()
+            }));
+            adicionarDocumentos(docsNormalizados);
+            log(`📁 ${docs.length} documento(s) recebido(s) — ${docs.map(d=>d.nome).join(', ')}`, 'ok');
+          }
+        } else {
+          console.warn('Documento recebido para outra USF:', m.ubs_id, '| Esta USF:', ubsId);
+        }
       }
-    } catch (e) {}
+
+      // ===== DOCUMENTO ENVIADO CONFIRMADO =====
+      if (m.type === 'parar_piscar') {
+        // já tratado localmente
+      }
+    } catch (e) {
+      console.error('Erro ao processar mensagem WS:', e);
+    }
   };
-}
-
-function adicionarDocumentos(docs) {
-  docs.forEach(d => documentosRecebidos.unshift(d));
-  renderDocumentos();
-}
-
-function renderDocumentos() {
-  const lista = document.getElementById('lista-docs');
-  if (documentosRecebidos.length === 0) {
-    lista.innerHTML = '<div class="doc-vazio">Nenhum documento recebido ainda.</div>';
-    return;
-  }
-  lista.innerHTML = '';
-  documentosRecebidos.slice(0, 50).forEach(d => {
-    const item = document.createElement('div');
-    item.className = 'doc-item';
-    const tamanho = d.tamanho ? ` • ${(d.tamanho/1024).toFixed(0)} KB` : '';
-    const data = d.ts ? new Date(d.ts).toLocaleString('pt-BR') : '';
-    item.innerHTML = `
-      <div class="info">
-        <div class="nome">📄 ${d.nome}</div>
-        <div class="meta">${data}${tamanho}</div>
-      </div>
-      <a href="${d.url}" target="_blank" rel="noopener">Baixar</a>`;
-    lista.appendChild(item);
-  });
 }
 
 // ============ HEARTBEAT ============
