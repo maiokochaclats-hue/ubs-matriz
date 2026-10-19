@@ -11,7 +11,7 @@ const MAX_HISTORICO = 50;
 const MAX_MENSAGENS = 500;
 const TOKENS = new Set();
 const TIMEOUT_HEARTBEAT = 15 * 1000;
-const INTERVALO_BACKUP = 2 * 60 * 1000; // 2 minutos
+const INTERVALO_BACKUP = 2 * 60 * 1000;
 const TABELA_BACKUP = 'backup_estado';
 
 // ============ SUPABASE (SERVER-SIDE) ============
@@ -217,29 +217,19 @@ async function restaurarDoSupabase() {
 }
 
 async function carregarDados() {
-  // 1. Tenta carregar local
   const carregouLocal = carregarDadosLocal();
   if (carregouLocal) {
     console.log(`💾 Dados carregados do arquivo local: ${Object.keys(ubsMap).length} unidades`);
     return;
   }
-
-  // 2. Se não tem local, tenta restaurar do Supabase
   console.log('🔍 Arquivo local vazio — tentando restaurar do Supabase...');
   const restaurou = await restaurarDoSupabase();
-  if (restaurou) {
-    // Salva localmente para próximas inicializações
-    salvarDados();
-    return;
-  }
-
-  // 3. Se nada funcionou, usa dados iniciais
+  if (restaurou) { salvarDados(); return; }
   console.log('🆕 Sem backup disponível — usando dados iniciais');
   estado = JSON.parse(JSON.stringify(DADOS_INICIAIS));
   ubsMap = {};
 }
 
-// Debounce para salvar no arquivo local
 let salvarTimer = null;
 function salvarDados() {
   clearTimeout(salvarTimer);
@@ -252,10 +242,7 @@ function salvarDados() {
   }, 500);
 }
 
-// Agenda backup periódico
-setInterval(() => {
-  backupParaSupabase(false);
-}, INTERVALO_BACKUP);
+setInterval(() => { backupParaSupabase(false); }, INTERVALO_BACKUP);
 
 // ============ WEBSOCKET ============
 function aceitarWS(req, socket) {
@@ -336,12 +323,8 @@ function getNomePorUsuario(tipo, id) {
 
 function podeMensagem(origem, destino) {
   if (!origem || !destino) return false;
-  if (origem.tipo === 'presidencia') {
-    return ['presidencia', 'diretoria', 'apoio'].includes(destino.tipo);
-  }
-  if (destino.tipo === 'presidencia') {
-    return ['diretoria', 'apoio'].includes(origem.tipo);
-  }
+  if (origem.tipo === 'presidencia') return ['presidencia', 'diretoria', 'apoio'].includes(destino.tipo);
+  if (destino.tipo === 'presidencia') return ['diretoria', 'apoio'].includes(origem.tipo);
   if (origem.tipo === 'diretoria' && destino.tipo === 'apoio') return true;
   if (origem.tipo === 'apoio' && destino.tipo === 'diretoria') return true;
   if (origem.tipo === 'diretoria' && destino.tipo === 'diretoria') return false;
@@ -355,7 +338,7 @@ function salvarMensagem(msg) {
   estado.mensagens.unshift(msg);
   if (estado.mensagens.length > MAX_MENSAGENS) estado.mensagens.length = MAX_MENSAGENS;
   salvarDados();
-  backupParaSupabase(true); // backup imediato
+  backupParaSupabase(true);
 }
 
 function enviarMensagemPara(destino, mensagem) {
@@ -418,6 +401,7 @@ function tratarMensagem(cliente, msg) {
     return;
   }
 
+  // ===== ENVIO DE MENSAGEM =====
   if (msg.type === 'enviar_mensagem') {
     const { destino_tipo, destino_id, assunto, prioridade, corpo, anexos } = msg;
     const origem = { tipo: cliente.papel === 'matriz' ? 'presidencia' : cliente.papel, id: cliente.usuario };
@@ -457,6 +441,7 @@ function tratarMensagem(cliente, msg) {
     return;
   }
 
+  // ===== DADOS DOS SETORES =====
   if (msg.type === 'dados_setor' && msg.ubs_id) {
     const ubs = ubsMap[msg.ubs_id];
     if (!ubs) return;
@@ -495,6 +480,7 @@ function tratarMensagem(cliente, msg) {
     return;
   }
 
+  // ===== DOCUMENTOS =====
   if (msg.type === 'documento_setor' && msg.ubs_id) {
     const ubs = ubsMap[msg.ubs_id];
     if (!ubs) return;
@@ -502,12 +488,14 @@ function tratarMensagem(cliente, msg) {
     msg.documentos.forEach(doc => {
       ubs.documentos.unshift({
         ...doc, setor_id: msg.setor_id, setor_nome: msg.setor_nome,
-        origem: 'filial', destino: 'matriz', ts: new Date().toISOString()
+        origem: 'filial', destino: 'matriz', ts: new Date().toISOString(), lido: false
       });
     });
     if (ubs.documentos.length > 200) ubs.documentos.length = 200;
     ubs.ultimoHeartbeat = Date.now();
     ubs.online = true;
+    // Conta como "não lido" no card da diretoria
+    ubs.docsNaoLidos = (ubs.docsNaoLidos || 0) + msg.documentos.length;
     salvarDados();
     broadcast({
       type: 'documento_recebido', ubs_id: msg.ubs_id, ubs_nome: ubs.nome,
@@ -524,7 +512,7 @@ function tratarMensagem(cliente, msg) {
     msg.documentos.forEach(doc => {
       ubs.documentos.unshift({
         ...doc, setor_id: null, setor_nome: null,
-        origem: 'matriz', destino: 'filial', ts: new Date().toISOString()
+        origem: 'matriz', destino: 'filial', ts: new Date().toISOString(), lido: false
       });
     });
     if (ubs.documentos.length > 200) ubs.documentos.length = 200;
@@ -536,11 +524,18 @@ function tratarMensagem(cliente, msg) {
     return;
   }
 
+  // ===== MARCAR DOCS COMO LIDOS =====
   if (msg.type === 'marcar_docs_lidos' && msg.ubs_id) {
     const ubs = ubsMap[msg.ubs_id];
     if (ubs && ubs.documentos) {
-      ubs.documentos.forEach(d => { if (d.origem !== msg.origem) d.lido = true; });
+      ubs.documentos.forEach(d => {
+        if (d.origem !== msg.origem) d.lido = true;
+      });
+      // Zera contador e persiste
+      ubs.docsNaoLidos = 0;
       salvarDados();
+      // Avisa todos os clientes conectados (diretoria/presidência)
+      broadcast({ type: 'docs_marcados_lidos', ubs_id: msg.ubs_id });
     }
     return;
   }
@@ -678,7 +673,7 @@ const server = http.createServer(async (req, res) => {
     return json(res, 200, { ok: true, destinos });
   }
 
-  // ===== BACKUP MANUAL =====
+  // ===== BACKUP =====
   if (url === '/api/backup-now' && req.method === 'POST') {
     if (!requirePresidencia(req)) return json(res, 403, { ok: false });
     await backupParaSupabase(true);
@@ -767,6 +762,19 @@ const server = http.createServer(async (req, res) => {
     return json(res, 200, { ok: true, presidencia: estado.presidencia });
   }
 
+  // ===== MARCAR LIDO =====
+  if (url === '/api/marcar-lido' && req.method === 'POST') {
+    const body = await lerCorpo(req);
+    const ubs = ubsMap[body.ubs_id];
+    if (ubs) {
+      ubs.novosDados = 0;
+      ubs.docsNaoLidos = 0;
+      salvarDados();
+      broadcast({ type: 'docs_marcados_lidos', ubs_id: body.ubs_id });
+    }
+    return json(res, 200, { ok: true });
+  }
+
   // ===== REGISTRO =====
   if (url === '/api/registrar' && req.method === 'POST') {
     const body = await lerCorpo(req);
@@ -792,7 +800,8 @@ const server = http.createServer(async (req, res) => {
       online: true, ultimoHeartbeat: Date.now(),
       setores: setoresNovos,
       documentos: existente?.documentos || [],
-      novosDados: existente?.novosDados || 0
+      novosDados: existente?.novosDados || 0,
+      docsNaoLidos: existente?.docsNaoLidos || 0
     };
     salvarDados();
     broadcast({ type: 'ubs_registrada', ubs: ubsMap[id] });
